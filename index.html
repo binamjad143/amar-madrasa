@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>আমার মাদ্রাসা — অনলাইন</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *{box-sizing:border-box} body{margin:0;font-family:"Noto Sans Bengali",Arial,sans-serif;background:#f4f6f4;color:#1b2b21}
+  header{background:linear-gradient(135deg,#065f46,#0b5d3b);color:#fff;text-align:center;padding:12px 8px}
+  header h1{margin:2px 0;font-size:24px} header p{margin:0;opacity:.9;font-size:14px}
+  nav{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;background:#084a2f;padding:6px}
+  nav button{background:transparent;color:#fff;border:0;padding:8px 12px;border-radius:6px;font:inherit;cursor:pointer}
+  nav button.on,nav button:hover{background:#c9a227;color:#000}
+  main{max-width:1000px;margin:14px auto;padding:0 10px}
+  .box{background:#fff;border-radius:10px;padding:14px;margin-bottom:14px;box-shadow:0 1px 4px #0002}
+  h2{margin:0 0 10px;color:#0b5d3b;font-size:20px}
+  input,select,textarea{padding:8px;border:1px solid #9ab;border-radius:6px;font:inherit}
+  button.act{background:#0b5d3b;color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit}
+  button.gold{background:#c9a227;color:#000} button.red{background:#b3261e;color:#fff}
+  button.s{padding:4px 8px;font-size:13px}
+  table{border-collapse:collapse;width:100%;font-size:14px} th,td{border:1px solid #cbd;padding:6px;text-align:left} th{background:#e3efe7}
+  .row{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0;align-items:center}
+  .msg{padding:10px;border-radius:8px;background:#fff8e1;border:1px solid #e6c65c;margin:8px 0}
+  .err{background:#fdecea;border-color:#e57373} .ok{background:#e8f5e9;border-color:#81c784}
+  .hidden{display:none} .stat{display:inline-block;background:#e3efe7;border-radius:8px;padding:10px 14px;margin:4px}
+  .stat b{font-size:20px;color:#0b5d3b}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="instName">দারুল আরকাম মডেল মাদ্রাসা</h1>
+  <p>আমার মাদ্রাসা — অনলাইন সংস্করণ</p>
+</header>
+
+<!-- লগইন -->
+<div id="loginView" class="hidden" style="max-width:420px;margin:24px auto;padding:0 10px">
+  <div class="box">
+    <h2>লগইন করুন</h2>
+    <div id="cfgWarn" class="msg err hidden">সার্ভারের সাথে সংযোগ সেট করা হয়নি (config.js-এ Project URL ও anon key বসাতে হবে)।</div>
+    <div class="row"><input id="li_email" type="email" placeholder="ইমেইল" style="flex:1"></div>
+    <div class="row"><input id="li_pass" type="password" placeholder="পাসওয়ার্ড" style="flex:1"></div>
+    <div class="row"><button class="act" onclick="doLogin()">লগইন</button>
+    <button class="act gold" onclick="doSignup()">নতুন অ্যাকাউন্ট খুলুন (প্রথমবার)</button></div>
+    <div id="li_msg"></div>
+    <p style="font-size:13px;color:#555">প্রথমবার শুধু একবার “নতুন অ্যাকাউন্ট খুলুন” চাপ দিয়ে নিজের ইমেইল ও পাসওয়ার্ড দিয়ে অ্যাকাউন্ট বানান — এরপর থেকে শুধু লগইন করলেই হবে। পাসওয়ার্ড ভুলে গেলে মালিককে জানান।</p>
+  </div>
+</div>
+
+<!-- মূল অ্যাপ -->
+<div id="appView" class="hidden">
+  <nav id="tabs">
+    <button data-t="home" class="on">হোম</button>
+    <button data-t="classes">জামাত</button>
+    <button data-t="students">ছাত্র</button>
+    <button data-t="attendance">হাজিরা</button>
+    <button data-t="fees">বেতন</button>
+    <button data-t="teachers">শিক্ষক</button>
+    <button data-t="ledger">হিসাব</button>
+    <button data-t="exams">পরীক্ষা</button>
+    <button data-t="homework">হোমওয়ার্ক</button>
+    <button data-t="opay">অনলাইন পেমেন্ট</button>
+    <button data-t="notices">নোটিশ</button>
+    <button data-t="backup">ব্যাকআপ</button>
+    <button onclick="doLogout()">লগআউট</button>
+  </nav>
+  <main id="page"></main>
+</div>
+
+<script src="config.js"></script>
+<script>
+let sb=null, me=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function msg(el,text,kind){ el.innerHTML = text? `<div class="msg ${kind||''}">${esc(text)}</div>`:''; }
+
+function init(){
+  if(!window.APP_CONFIG || !APP_CONFIG.SUPABASE_URL || APP_CONFIG.SUPABASE_URL.includes('YOUR-PROJECT')){
+    $('loginView').classList.remove('hidden'); $('cfgWarn').classList.remove('hidden'); return;
+  }
+  sb = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_ANON_KEY);
+  sb.auth.getSession().then(({data})=>{ data.session? enterApp(data.session.user) : $('loginView').classList.remove('hidden'); });
+  sb.auth.onAuthStateChange((_e,session)=>{ session? enterApp(session.user) : location.reload(); });
+}
+async function doLogin(){
+  msg($('li_msg'),'');
+  const {data,error}=await sb.auth.signInWithPassword({email:$('li_email').value.trim(),password:$('li_pass').value});
+  if(error) msg($('li_msg'),'লগইন হয়নি: '+error.message,'err'); else enterApp(data.user);
+}
+async function doSignup(){
+  msg($('li_msg'),'');
+  const email=$('li_email').value.trim(), password=$('li_pass').value;
+  if(!email||password.length<6) return msg($('li_msg'),'ইমেইল দিন ও অন্তত ৬ অক্ষরের পাসওয়ার্ড দিন।','err');
+  const {data,error}=await sb.auth.signUp({email,password});
+  if(error) return msg($('li_msg'),'অ্যাকাউন্ট হয়নি: '+error.message,'err');
+  if(data.session) enterApp(data.user);
+  else if(data.user) { const r=await sb.auth.signInWithPassword({email,password}); r.error? msg($('li_msg'),'অ্যাকাউন্ট হয়েছে, এখন লগইন বাটনে চাপ দিন।','ok') : enterApp(r.data.user); }
+}
+async function doLogout(){ await sb.auth.signOut(); location.reload(); }
+
+async function enterApp(user){
+  me=user; $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden');
+  const {data}=await sb.from('institution').select('*').eq('id',1).single();
+  if(data&&data.name_bn) $('instName').textContent=data.name_bn;
+  document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.onclick=()=>go(b.dataset.t));
+  go('home');
+  keepAlive();
+}
+async function keepAlive(){ try{ await sb.from('keep_alive').update({last_ping:new Date().toISOString()}).eq('id',1); }catch(e){} }
+
+function go(t){
+  document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  ({home:pageHome,classes:pageClasses,students:pageStudents,attendance:pageAttendance,fees:pageFees,teachers:pageTeachers,ledger:pageLedger,exams:pageExams,homework:pageHomework,opay:pageOpay,notices:pageNotices,backup:pageBackup}[t]||pageHome)();
+}
+
+/* ---------- হোম ---------- */
+async function pageHome(){
+  const p=$('page'); p.innerHTML='<div class="box">লোড হচ্ছে…</div>';
+  const today=new Date().toISOString().slice(0,10), month=today.slice(0,7);
+  const [st,cl,att,pay]=await Promise.all([
+    sb.from('students').select('id',{count:'exact',head:true}).eq('status','active'),
+    sb.from('classes').select('id',{count:'exact',head:true}),
+    sb.from('attendance').select('id',{count:'exact',head:true}).eq('att_date',today).eq('status','present'),
+    sb.from('payments').select('amount').gte('pay_date',month+'-01')
+  ]);
+  const total=(pay.data||[]).reduce((a,r)=>a+Number(r.amount||0),0);
+  p.innerHTML=`<div class="box"><h2>সারসংক্ষেপ</h2>
+    <span class="stat">মোট ছাত্র<br><b>${st.count??0}</b></span>
+    <span class="stat">জামাত<br><b>${cl.count??0}</b></span>
+    <span class="stat">আজ উপস্থিত<br><b>${att.count??0}</b></span>
+    <span class="stat">এই মাসে আদায়<br><b>৳${total}</b></span></div>
+    <div class="box"><h2>শুরুটা এখান থেকে করুন</h2>
+    <p>১) আগে জামাত তৈরি করুন → ২) তারপর ছাত্র যোগ করুন → ৩) হাজিরা ও বেতন চালু হবে।</p>
+    <div class="row"><button class="act gold" onclick="go('classes')">আগে জামাত তৈরি করুন</button>
+    <button class="act" onclick="go('students')">ছাত্র যোগ করুন</button></div></div>`;
+}
+
+/* ---------- জামাত ---------- */
+async function pageClasses(){
+  const p=$('page');
+  const {data}=await sb.from('classes').select('*').order('sort_order');
+  p.innerHTML=`<div class="box"><h2>জামাতের তালিকা</h2>
+    ${data&&data.length? `<table><tr><th>জামাত</th><th>মাসিক বেতন</th></tr>${data.map(c=>`<tr><td>${esc(c.name)}</td><td>৳${c.monthly_fee}</td></tr>`).join('')}</table>`
+      : '<div class="msg">এখনো কোনো জামাত তৈরি হয়নি। নিচের ঘরে নাম লিখে “যোগ করুন” চাপ দিন।</div>'}
+    <div class="row"><input id="nc_name" placeholder="জামাতের নাম (যেমন: নাজেরা)"><input id="nc_fee" type="number" placeholder="মাসিক বেতন (৳)" value="300">
+    <button class="act" onclick="addClass()">যোগ করুন</button></div><div id="c_msg"></div></div>`;
+}
+async function addClass(){
+  const name=$('nc_name').value.trim(); if(!name) return msg($('c_msg'),'জামাতের নাম লিখুন।','err');
+  const {error}=await sb.from('classes').insert({name,monthly_fee:Number($('nc_fee').value||0),sort_order:Date.now()%100000});
+  error? msg($('c_msg'),'হয়নি: '+error.message,'err') : pageClasses();
+}
+
+/* ---------- ছাত্র ---------- */
+async function pageStudents(){
+  const p=$('page');
+  const [{data:cls},{data:sts}]=await Promise.all([
+    sb.from('classes').select('*').order('sort_order'),
+    sb.from('students').select('*,classes(name)').eq('status','active').order('roll')
+  ]);
+  const opts=(cls||[]).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  p.innerHTML=`<div class="box"><h2>ছাত্র যোগ করুন</h2>
+    ${!cls||!cls.length? '<div class="msg">আগে জামাত তৈরি করতে হবে — ছাত্র কোন জামাতে পড়বে তা লাগবে। <button class="act gold s" onclick="go(\'classes\')">আগে জামাত তৈরি করুন</button></div>':''}
+    <div class="row"><input id="ns_name" placeholder="ছাত্রের নাম"><input id="ns_roll" type="number" placeholder="রোল">
+    <select id="ns_class"><option value="">জামাত বাছুন</option>${opts}</select>
+    <input id="ns_phone" placeholder="অভিভাবকের ফোন"><button class="act" onclick="addStudent()">যোগ করুন</button></div><div id="s_msg"></div></div>
+    <div class="box"><h2>ছাত্রদের তালিকা (${sts?sts.length:0})</h2>
+    ${sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th><th>জামাত</th><th>অভিভাবকের ফোন</th></tr>
+      ${sts.map(s=>`<tr><td>${s.roll??''}</td><td>${esc(s.name)}</td><td>${esc(s.classes?s.classes.name:'')}</td><td>${esc(s.guardian_phone||'')}</td></tr>`).join('')}</table>`
+      : '<div class="msg">এখনো কোনো ছাত্র যোগ হয়নি। উপরের ফরমে নাম লিখে যোগ করুন।</div>'}</div>`;
+}
+async function addStudent(){
+  const name=$('ns_name').value.trim(); if(!name) return msg($('s_msg'),'ছাত্রের নাম লিখুন।','err');
+  const {error}=await sb.from('students').insert({name,roll:$('ns_roll').value?Number($('ns_roll').value):null,
+    class_id:$('ns_class').value||null,guardian_phone:$('ns_phone').value.trim()});
+  error? msg($('s_msg'),'হয়নি: '+error.message,'err') : pageStudents();
+}
+
+/* ---------- হাজিরা ---------- */
+async function pageAttendance(){
+  const p=$('page'); const today=new Date().toISOString().slice(0,10);
+  const [{data:cls},{data:sts},{data:att}]=await Promise.all([
+    sb.from('classes').select('*').order('sort_order'),
+    sb.from('students').select('*').eq('status','active').order('roll'),
+    sb.from('attendance').select('*').eq('att_date',today)
+  ]);
+  const attMap={}; (att||[]).forEach(a=>attMap[a.student_id]=a.status);
+  const opts=(cls||[]).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  p.innerHTML=`<div class="box"><h2>আজকের হাজিরা (${today})</h2>
+    <div class="row"><select id="at_class" onchange="pageAttendance()"><option value="">সব জামাত</option>${opts}</select></div>
+    ${sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th><th>অবস্থা</th></tr>
+      ${sts.filter(s=>!$('at_class')||!window._atCls||s.class_id==window._atCls).map(s=>`<tr><td>${s.roll??''}</td><td>${esc(s.name)}</td>
+      <td>${['present','absent','late','leave'].map(v=>`<button class="s ${attMap[s.id]===v?'act':'act gold'}" onclick="markAtt('${s.id}','${v}')">${{present:'উপস্থিত',absent:'অনুপস্থিত',late:'দেরি',leave:'ছুটি'}[v]}</button>`).join(' ')}</td></tr>`).join('')}</table>`
+      : '<div class="msg">ছাত্র নেই — আগে ছাত্র যোগ করুন।</div>'}
+    <div id="a_msg"></div></div>`;
+  const sel=$('at_class'); if(sel){ sel.value=window._atCls||''; sel.onchange=()=>{window._atCls=sel.value||null; pageAttendance();}; }
+}
+async function markAtt(studentId,status){
+  const today=new Date().toISOString().slice(0,10);
+  const {error}=await sb.from('attendance').upsert({student_id:studentId,att_date:today,status,marked_by:me.id},{onConflict:'student_id,att_date'});
+  error? msg($('a_msg'),'হয়নি: '+error.message,'err') : pageAttendance();
+}
+
+/* ---------- বেতন ---------- */
+async function pageFees(){
+  const p=$('page'); const month=new Date().toISOString().slice(0,7);
+  const [{data:sts},{data:bills},{data:pays}]=await Promise.all([
+    sb.from('students').select('*,classes(name,monthly_fee)').eq('status','active').order('roll'),
+    sb.from('bills').select('*').eq('bill_month',month),
+    sb.from('payments').select('*')
+  ]);
+  const billSum={},paySum={};
+  (bills||[]).forEach(b=>billSum[b.student_id]=(billSum[b.student_id]||0)+Number(b.amount)-Number(b.discount||0));
+  (pays||[]).forEach(x=>paySum[x.student_id]=(paySum[x.student_id]||0)+Number(x.amount));
+  p.innerHTML=`<div class="box"><h2>বেতন — ${month}</h2>
+    <div class="row"><button class="act gold" onclick="makeMonthlyBills('${month}')">এক ক্লিকে এই মাসের বিল তৈরি করুন</button></div><div id="f_msg"></div>
+    ${sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th><th>জামাত</th><th>বিল (এই মাস)</th><th>মোট জমা</th><th>বকেয়া (মোট জমা অনুযায়ী)</th><th>জমা নিন</th></tr>
+    ${sts.map(s=>{const due=(billSum[s.id]||0)-(0); const paid=paySum[s.id]||0;
+      return `<tr><td>${s.roll??''}</td><td>${esc(s.name)}</td><td>${esc(s.classes?s.classes.name:'')}</td>
+      <td>৳${billSum[s.id]||0}</td><td>৳${paid}</td><td>৳${Math.max(0,(billSum[s.id]||0)-paid)}</td>
+      <td><input id="pay_${s.id}" type="number" style="width:90px" placeholder="৳"><button class="act s" onclick="takePay('${s.id}')">জমা</button></td></tr>`}).join('')}</table>`
+    : '<div class="msg">ছাত্র নেই — আগে ছাত্র যোগ করুন।</div>'}</div>`;
+}
+async function makeMonthlyBills(month){
+  const {data:sts}=await sb.from('students').select('id,classes(monthly_fee)').eq('status','active');
+  const {data:exist}=await sb.from('bills').select('student_id').eq('bill_month',month).eq('head_name','মাসিক বেতন');
+  const have=new Set((exist||[]).map(b=>b.student_id));
+  const rows=(sts||[]).filter(s=>!have.has(s.id)).map(s=>({student_id:s.id,bill_month:month,head_name:'মাসিক বেতন',amount:Number(s.classes?s.classes.monthly_fee||0:0)}));
+  if(!rows.length) return msg($('f_msg'),'এই মাসের বিল আগেই তৈরি আছে — নতুন করে হয়নি।');
+  const {error}=await sb.from('bills').insert(rows);
+  error? msg($('f_msg'),'হয়নি: '+error.message,'err') : (msg($('f_msg'),rows.length+' জন ছাত্রের বিল তৈরি হলো।','ok'), pageFees());
+}
+async function takePay(studentId){
+  const amt=Number(($('pay_'+studentId)||{}).value||0); if(!amt) return msg($('f_msg'),'আগে টাকার পরিমাণ লিখুন।','err');
+  const {error}=await sb.from('payments').insert({student_id:studentId,amount:amt,method:'cash',received_by:me.id});
+  error? msg($('f_msg'),'হয়নি: '+error.message,'err') : pageFees();
+}
+
+/* ---------- নোটিশ ---------- */
+async function pageNotices(){
+  const {data}=await sb.from('notices').select('*').order('notice_date',{ascending:false});
+  $('page').innerHTML=`<div class="box"><h2>নোটিশ</h2>
+    <div class="row"><input id="no_title" placeholder="শিরোনাম" style="flex:1"></div>
+    <div class="row"><textarea id="no_body" placeholder="নোটিশের লেখা" style="flex:1"></textarea></div>
+    <div class="row"><button class="act" onclick="addNotice()">নোটিশ দিন</button></div><div id="n_msg"></div>
+    ${data&&data.length? data.map(n=>`<div class="box"><b>${esc(n.title)}</b> <small>(${n.notice_date})</small><p>${esc(n.body)}</p></div>`).join('') : '<div class="msg">এখনো কোনো নোটিশ নেই।</div>'}</div>`;
+}
+async function addNotice(){
+  const title=$('no_title').value.trim(), body=$('no_body').value.trim();
+  if(!title||!body) return msg($('n_msg'),'শিরোনাম ও লেখা দুটোই লিখুন।','err');
+  const {error}=await sb.from('notices').insert({title,body});
+  error? msg($('n_msg'),'হয়নি: '+error.message,'err') : pageNotices();
+}
+
+/* ---------- শিক্ষক ---------- */
+async function pageTeachers(){
+  const {data}=await sb.from('teachers').select('*').eq('status','active').order('name');
+  $('page').innerHTML=`<div class="box"><h2>শিক্ষক যোগ করুন</h2>
+    <div class="row"><input id="nt_name" placeholder="নাম"><input id="nt_post" placeholder="পদ (যেমন: হিফজ শিক্ষক)">
+    <input id="nt_phone" placeholder="ফোন"><input id="nt_salary" type="number" placeholder="মাসিক বেতন (৳)">
+    <button class="act" onclick="addTeacher()">যোগ করুন</button></div><div id="t_msg"></div></div>
+    <div class="box"><h2>শিক্ষকদের তালিকা (${data?data.length:0})</h2>
+    ${data&&data.length? `<table><tr><th>নাম</th><th>পদ</th><th>ফোন</th><th>বেতন</th><th>বেতন দিন</th></tr>
+      ${data.map(t=>`<tr><td>${esc(t.name)}</td><td>${esc(t.post||'')}</td><td>${esc(t.phone||'')}</td><td>৳${t.salary}</td>
+      <td><button class="act s" onclick="paySalary('${t.id}',${Number(t.salary||0)})">এই মাসের বেতন দিন</button></td></tr>`).join('')}</table>`
+      : '<div class="msg">এখনো কোনো শিক্ষক যোগ হয়নি। উপরের ফরমে যোগ করুন।</div>'}<div id="t2_msg"></div></div>`;
+}
+async function addTeacher(){
+  const name=$('nt_name').value.trim(); if(!name) return msg($('t_msg'),'নাম লিখুন।','err');
+  const {error}=await sb.from('teachers').insert({name,post:$('nt_post').value.trim(),phone:$('nt_phone').value.trim(),salary:Number($('nt_salary').value||0)});
+  error? msg($('t_msg'),'হয়নি: '+error.message,'err') : pageTeachers();
+}
+async function paySalary(teacherId,amount){
+  const month=new Date().toISOString().slice(0,7);
+  const {data:exist}=await sb.from('salary_payments').select('id').eq('teacher_id',teacherId).eq('pay_month',month);
+  if(exist&&exist.length) return msg($('t2_msg'),'এই মাসের বেতন আগেই দেওয়া হয়েছে।');
+  const {error}=await sb.from('salary_payments').insert({teacher_id:teacherId,pay_month:month,amount});
+  if(!error) await sb.from('ledger').insert({kind:'expense',head:'শিক্ষক বেতন',amount,note:month});
+  error? msg($('t2_msg'),'হয়নি: '+error.message,'err') : (msg($('t2_msg'),'বেতন দেওয়া হয়েছে ও হিসাবে যোগ হয়েছে।','ok'), pageTeachers());
+}
+
+/* ---------- হিসাব (লেজার) ---------- */
+async function pageLedger(){
+  const {data}=await sb.from('ledger').select('*').eq('voided',false).order('entry_date',{ascending:false}).limit(200);
+  const inc=(data||[]).filter(r=>r.kind==='income').reduce((a,r)=>a+Number(r.amount),0);
+  const exp=(data||[]).filter(r=>r.kind==='expense').reduce((a,r)=>a+Number(r.amount),0);
+  $('page').innerHTML=`<div class="box"><h2>আয়-ব্যয়</h2>
+    <span class="stat">মোট আয়<br><b>৳${inc}</b></span><span class="stat">মোট ব্যয়<br><b>৳${exp}</b></span><span class="stat">হাতে আছে<br><b>৳${inc-exp}</b></span>
+    <div class="row"><select id="nl_kind"><option value="income">আয়</option><option value="expense">ব্যয়</option></select>
+    <input id="nl_head" placeholder="খাত (যেমন: দান, বই কেনা)"><input id="nl_amt" type="number" placeholder="৳">
+    <button class="act" onclick="addLedger()">যোগ করুন</button></div><div id="l_msg"></div></div>
+    <div class="box">${data&&data.length? `<table><tr><th>তারিখ</th><th>ধরন</th><th>খাত</th><th>পরিমাণ</th></tr>
+      ${data.map(r=>`<tr><td>${r.entry_date}</td><td>${r.kind==='income'?'আয়':'ব্যয়'}</td><td>${esc(r.head)}</td><td>৳${r.amount}</td></tr>`).join('')}</table>`
+      : '<div class="msg">এখনো কোনো হিসাব নেই।</div>'}</div>`;
+}
+async function addLedger(){
+  const head=$('nl_head').value.trim(), amount=Number($('nl_amt').value||0);
+  if(!head||!amount) return msg($('l_msg'),'খাত ও পরিমাণ লিখুন।','err');
+  const {error}=await sb.from('ledger').insert({kind:$('nl_kind').value,head,amount});
+  error? msg($('l_msg'),'হয়নি: '+error.message,'err') : pageLedger();
+}
+
+/* ---------- পরীক্ষা ও নম্বর ---------- */
+async function pageExams(){
+  const [{data:cls},{data:exams}]=await Promise.all([
+    sb.from('classes').select('*').order('sort_order'),
+    sb.from('exams').select('*,classes(name)').order('created_at',{ascending:false})
+  ]);
+  const opts=(cls||[]).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('page').innerHTML=`<div class="box"><h2>নতুন পরীক্ষা</h2>
+    <div class="row"><input id="ne_name" placeholder="পরীক্ষার নাম (যেমন: বার্ষিক পরীক্ষা)">
+    <select id="ne_class"><option value="">জামাত বাছুন</option>${opts}</select>
+    <button class="act" onclick="addExam()">তৈরি করুন</button></div><div id="e_msg"></div></div>
+    <div class="box"><h2>পরীক্ষার তালিকা</h2>
+    ${exams&&exams.length? `<table><tr><th>পরীক্ষা</th><th>জামাত</th><th>কাজ</th></tr>
+      ${exams.map(e=>`<tr><td>${esc(e.name)}</td><td>${esc(e.classes?e.classes.name:'')}</td>
+      <td><button class="act s" onclick="pageMarks(${e.id})">নম্বর বসান ও রেজাল্ট</button></td></tr>`).join('')}</table>`
+      : '<div class="msg">এখনো কোনো পরীক্ষা তৈরি হয়নি।</div>'}</div>`;
+}
+async function addExam(){
+  const name=$('ne_name').value.trim(); if(!name) return msg($('e_msg'),'পরীক্ষার নাম লিখুন।','err');
+  const {error}=await sb.from('exams').insert({name,class_id:$('ne_class').value||null});
+  error? msg($('e_msg'),'হয়নি: '+error.message,'err') : pageExams();
+}
+async function pageMarks(examId){
+  const {data:exam}=await sb.from('exams').select('*,classes(name)').eq('id',examId).single();
+  const [{data:subs},{data:sts},{data:marks}]=await Promise.all([
+    sb.from('subjects').select('*').eq('class_id',exam.class_id),
+    sb.from('students').select('*').eq('class_id',exam.class_id).eq('status','active').order('roll'),
+    sb.from('marks').select('*').eq('exam_id',examId)
+  ]);
+  const mm={}; (marks||[]).forEach(m=>mm[m.student_id+'_'+m.subject_id]=m.marks);
+  $('page').innerHTML=`<div class="box"><h2>${esc(exam.name)} — ${esc(exam.classes?exam.classes.name:'')}</h2>
+    <div class="row"><input id="nsj_name" placeholder="বিষয়ের নাম (যেমন: কুরআন)"><input id="nsj_full" type="number" value="100" style="width:100px">
+    <button class="act" onclick="addSubject('${exam.class_id}',${examId})">বিষয় যোগ করুন</button></div><div id="m_msg"></div>
+    ${subs&&subs.length&&sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th>${subs.map(s=>`<th>${esc(s.name)} (${s.full_marks})</th>`).join('')}<th>মোট</th></tr>
+      ${sts.map(st=>{let tot=0; const cells=subs.map(s=>{const v=mm[st.id+'_'+s.id]??''; if(v!=='') tot+=Number(v);
+        return `<td><input type="number" style="width:70px" value="${v}" onchange="saveMark(${examId},${st.id},${s.id},this.value)"></td>`}).join('');
+        return `<tr><td>${st.roll??''}</td><td>${esc(st.name)}</td>${cells}<td><b>${tot}</b></td></tr>`}).join('')}</table>
+      <p>নম্বর লিখলেই নিজে নিজে সেভ হয়ে যাবে। মোট নিজে নিজে হিসাব হয়। (মেধা তালিকা: মোটের বড় থেকে ছোট ক্রমে ছাত্ররা — ছাপানোর শিট পরের ধাপে আসছে।)</p>`
+      : '<div class="msg">আগে এই জামাতের বিষয় যোগ করুন, আর জামাতে ছাত্র থাকতে হবে।</div>'}
+    <div class="row"><button class="act gold" onclick="pageExams()">← পরীক্ষার তালিকায় ফিরুন</button></div></div>`;
+}
+async function addSubject(classId,examId){
+  const name=$('nsj_name').value.trim(); if(!name) return msg($('m_msg'),'বিষয়ের নাম লিখুন।','err');
+  const {error}=await sb.from('subjects').insert({class_id:classId,name,full_marks:Number($('nsj_full').value||100)});
+  error? msg($('m_msg'),'হয়নি: '+error.message,'err') : pageMarks(examId);
+}
+async function saveMark(examId,studentId,subjectId,val){
+  if(val==='') return;
+  await sb.from('marks').upsert({exam_id:examId,student_id:studentId,subject_id:subjectId,marks:Number(val)},{onConflict:'exam_id,student_id,subject_id'});
+}
+
+/* ---------- হোমওয়ার্ক ---------- */
+async function pageHomework(){
+  const [{data:cls},{data:hw}]=await Promise.all([
+    sb.from('classes').select('*').order('sort_order'),
+    sb.from('homework').select('*,classes(name)').order('hw_date',{ascending:false}).limit(50)
+  ]);
+  const opts=(cls||[]).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('page').innerHTML=`<div class="box"><h2>হোমওয়ার্ক দিন</h2>
+    <div class="row"><select id="nh_class"><option value="">জামাত বাছুন</option>${opts}</select><input id="nh_sub" placeholder="বিষয়"></div>
+    <div class="row"><textarea id="nh_det" placeholder="কী পড়া/কাজ দিলেন" style="flex:1"></textarea></div>
+    <div class="row"><button class="act" onclick="addHomework()">যোগ করুন</button></div><div id="h_msg"></div></div>
+    <div class="box"><h2>সাম্প্রতিক হোমওয়ার্ক</h2>
+    ${hw&&hw.length? hw.map(h=>`<p><b>${h.hw_date}</b> — ${esc(h.classes?h.classes.name:'')} / ${esc(h.subject||'')}: ${esc(h.details)}</p>`).join('') : '<div class="msg">এখনো কোনো হোমওয়ার্ক দেওয়া হয়নি।</div>'}</div>`;
+}
+async function addHomework(){
+  const details=$('nh_det').value.trim();
+  if(!$('nh_class').value) return msg($('h_msg'),'জামাত বাছুন।','err');
+  if(!details) return msg($('h_msg'),'হোমওয়ার্কের বিবরণ লিখুন।','err');
+  const {error}=await sb.from('homework').insert({class_id:$('nh_class').value,subject:$('nh_sub').value.trim(),details});
+  error? msg($('h_msg'),'হয়নি: '+error.message,'err') : pageHomework();
+}
+
+/* ---------- অনলাইন পেমেন্ট (যাচাই) ---------- */
+async function pageOpay(){
+  const {data}=await sb.from('online_payments').select('*,students(name,roll)').order('created_at',{ascending:false}).limit(100);
+  $('page').innerHTML=`<div class="box"><h2>অনলাইন পেমেন্টের আবেদন</h2>
+    <p>অভিভাবক পেমেন্ট করে ট্রানজ্যাকশন নম্বর জানালে এখানে আসবে। নিজের বিকাশ/নগদে টাকা এসেছে কিনা মিলিয়ে অনুমোদন দিন — অনুমোদন হলেই টাকা ছাত্রের জমায় যোগ হয়ে যাবে।</p>
+    <div id="o_msg"></div>
+    ${data&&data.length? `<table><tr><th>ছাত্র</th><th>পরিমাণ</th><th>মাধ্যম</th><th>ট্রানজ্যাকশন</th><th>অবস্থা</th><th>কাজ</th></tr>
+      ${data.map(o=>`<tr><td>${esc(o.students?o.students.name:'')} (${o.students?o.students.roll??'':''})</td><td>৳${o.amount}</td><td>${esc(o.method)}</td><td>${esc(o.trx_id)}</td>
+      <td>${{pending:'অপেক্ষমাণ',approved:'অনুমোদিত',rejected:'বাতিল'}[o.status]}</td>
+      <td>${o.status==='pending'? `<button class="act s" onclick="reviewOpay(${o.id},'${o.student_id}',${Number(o.amount)},'approved')">অনুমোদন</button> <button class="red s" onclick="reviewOpay(${o.id},'${o.student_id}',${Number(o.amount)},'rejected')">বাতিল</button>`:''}</td></tr>`).join('')}</table>`
+      : '<div class="msg">এখনো কোনো অনলাইন পেমেন্টের আবেদন আসেনি।</div>'}</div>`;
+}
+async function reviewOpay(id,studentId,amount,status){
+  const {error}=await sb.from('online_payments').update({status,reviewed_by:me.id,reviewed_at:new Date().toISOString()}).eq('id',id);
+  if(error) return msg($('o_msg'),'হয়নি: '+error.message,'err');
+  if(status==='approved') await sb.from('payments').insert({student_id:studentId,amount,method:'online',note:'অনলাইন পেমেন্ট অনুমোদিত',received_by:me.id});
+  pageOpay();
+}
+
+/* ---------- ব্যাকআপ ---------- */
+async function pageBackup(){
+  $('page').innerHTML=`<div class="box"><h2>ব্যাকআপ</h2>
+    <p>সব টেবিলের তথ্য JSON ফাইল হিসেবে নামিয়ে রাখুন। ফ্রি প্ল্যানে অটো-ব্যাকআপ নেই, তাই মাঝে মাঝে এটা করে রাখা জরুরি।</p>
+    <button class="act" onclick="doBackup()">ব্যাকআপ ডাউনলোড করুন</button><div id="b_msg"></div></div>`;
+}
+async function doBackup(){
+  const tables=['institution','classes','sections','students','teachers','attendance','teacher_attendance','fee_heads','bills','payments','online_payments','ledger','salary_payments','subjects','exams','marks','exam_routines','books','homework','notices','personal_notices','leaves'];
+  const out={exported_at:new Date().toISOString(),tables:{}};
+  for(const t of tables){ const {data}=await sb.from(t).select('*'); out.tables[t]=data||[]; }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
+  a.download='amar-madrasa-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
+  msg($('b_msg'),'ব্যাকআপ ফাইল ডাউনলোড হয়েছে।','ok');
+}
+
+init();
+</script>
+</body>
+</html>
