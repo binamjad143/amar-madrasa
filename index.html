@@ -117,9 +117,9 @@
     <div class="row"><input id="li_email" type="email" placeholder="ইমেইল" style="flex:1"></div>
     <div class="row"><input id="li_pass" type="password" placeholder="পাসওয়ার্ড" style="flex:1"></div>
     <div class="row"><button class="act" onclick="doLogin()">লগইন</button>
-    <button class="act gold" onclick="doSignup()">নতুন অ্যাকাউন্ট খুলুন (প্রথমবার)</button></div>
+    <button class="act gold" onclick="doSignup()">নতুন অ্যাকাউন্ট খুলুন</button></div>
     <div id="li_msg"></div>
-    <p style="font-size:13px;color:#555">প্রথমবার শুধু একবার “নতুন অ্যাকাউন্ট খুলুন” চাপ দিয়ে নিজের ইমেইল ও পাসওয়ার্ড দিয়ে অ্যাকাউন্ট বানান — এরপর থেকে শুধু লগইন করলেই হবে। পাসওয়ার্ড ভুলে গেলে মালিককে জানান।</p>
+    <p style="font-size:13px;color:#555">শিক্ষক ও ছাত্র/অভিভাবকের অ্যাকাউন্ট সাধারণত অ্যাডমিন তৈরি করে দেন। নিজে অ্যাকাউন্ট খুললে অ্যাডমিন ভূমিকা (শিক্ষক/ছাত্র) না দেওয়া পর্যন্ত ঢোকা যাবে না। পাসওয়ার্ড ভুলে গেলে অ্যাডমিনকে জানান।</p>
   </div>
 </div>
 
@@ -207,10 +207,63 @@ async function enterApp(user){
   if(data&&data.name_bn){ $('instName').textContent=data.name_bn; $('tbName').textContent=data.name_bn; $('drName').textContent=data.name_bn;
     const ch=data.name_bn.trim().charAt(0); $('tbAvatar').textContent=ch; $('drAvatar').textContent=ch; }
   document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>go(b.dataset.t));
-  go('home');
-  // ফোনের ব্যাক বাটন: অ্যাপ থেকে বের না হয়ে হোমে ফিরবে (নিচের popstate দেখুন)
+  // ভূমিকা (রোল) অনুযায়ী প্যানেল: admin সব, teacher আংশিক, student শুধু নিজের তথ্য
+  const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+  window._prof=prof||null; window._role=prof? prof.role : 'pending';
   try{ history.pushState({am:1},''); }catch(e){}
+  if(window._role==='pending'){
+    $('page').innerHTML=`<div class="box"><h2>অ্যাকাউন্ট অনুমোদনের অপেক্ষায়</h2>
+    <p>আপনার অ্যাকাউন্ট তৈরি হয়েছে, কিন্তু এখনো কোনো ভূমিকা (অ্যাডমিন/শিক্ষক/ছাত্র) দেওয়া হয়নি। মাদ্রাসার অ্যাডমিন সেটিংস থেকে ভূমিকা দিলে আপনি ঢুকতে পারবেন।</p>
+    <div class="row"><button class="act red" onclick="doLogout()">লগআউট</button></div></div>`;
+    document.querySelectorAll('.bottombar,.topbar .burger').forEach(e=>e.style.display='none');
+    return;
+  }
+  if(window._role==='student'){
+    document.querySelectorAll('.bottombar,.topbar .burger').forEach(e=>e.style.display='none');
+    $('tbPage').textContent='আমার তথ্য';
+    pageStudentHome();
+    return;
+  }
+  if(window._role==='teacher'){
+    const allowed=['home','attendance','homework','notices','settings'];
+    document.querySelectorAll('[data-t]').forEach(b=>{ if(!allowed.includes(b.dataset.t)) b.style.display='none'; });
+  }
+  go('home');
   keepAlive();
+}
+async function pageStudentHome(){
+  const sid=window._prof&&window._prof.student_id;
+  if(!sid){ $('page').innerHTML='<div class="box"><h2>তথ্য পাওয়া যায়নি</h2><p>আপনার লগইনের সাথে কোনো ছাত্রের তথ্য যুক্ত নেই। অ্যাডমিনকে জানান।</p><div class="row"><button class="act red" onclick="doLogout()">লগআউট</button></div></div>'; return; }
+  const [{data:s},{data:bills},{data:pays},{data:att},{data:notices},{data:pns},{data:marks}]=await Promise.all([
+    sb.from('students').select('*,classes(name)').eq('id',sid).single(),
+    sb.from('bills').select('*').eq('student_id',sid),
+    sb.from('payments').select('*').eq('student_id',sid).order('pay_date',{ascending:false}),
+    sb.from('attendance').select('status').eq('student_id',sid),
+    sb.from('notices').select('*').order('notice_date',{ascending:false}).limit(5),
+    sb.from('personal_notices').select('*').eq('student_id',sid).order('created_at',{ascending:false}).limit(10),
+    sb.from('marks').select('*,exams(name),subjects(name)').eq('student_id',sid)
+  ]);
+  if(!s) return;
+  const billed=(bills||[]).reduce((a,b)=>a+Number(b.amount)-Number(b.discount||0),0);
+  const paid=(pays||[]).reduce((a,x)=>a+Number(x.amount),0);
+  const due=billed+Number(s.opening_due||0)-paid;
+  const ac={present:0,absent:0,late:0,leave:0}; (att||[]).forEach(a=>ac[a.status]=(ac[a.status]||0)+1);
+  const byExam={}; (marks||[]).forEach(m=>{ const k=m.exams?m.exams.name:'পরীক্ষা'; (byExam[k]=byExam[k]||[]).push(m); });
+  $('page').innerHTML=`<div class="box"><h2>${esc(s.name)}</h2>
+    <p>জামাত: <b>${esc(s.classes?s.classes.name:'')}</b> • রোল: ${s.roll??''} • অভিভাবক: ${esc(s.guardian||'')} (${esc(s.guardian_phone||'')})</p>
+    <span class="stat">বকেয়া<br><b>৳${bnN(Math.max(0,due))}</b></span>
+    <span class="stat">উপস্থিত<br><b>${bnN(ac.present)} দিন</b></span>
+    <span class="stat">অনুপস্থিত<br><b>${bnN(ac.absent)} দিন</b></span>
+    <div class="row"><button class="act red" onclick="doLogout()">লগআউট</button></div></div>
+    ${pns&&pns.length? `<div class="box"><h2>আপনার জন্য নোটিশ</h2>${pns.map(x=>`<p>• ${esc(x.body)}</p>`).join('')}</div>`:''}
+    <div class="box"><h2>নোটিশ বোর্ড</h2>
+    ${notices&&notices.length? notices.map(n=>`<p><b>${esc(n.title)}</b> <small>(${n.notice_date})</small><br>${esc(n.body)}</p>`).join(''):'<div class="msg">কোনো নোটিশ নেই।</div>'}</div>
+    <div class="box"><h2>পরীক্ষার ফলাফল</h2>
+    ${Object.keys(byExam).length? Object.entries(byExam).map(([ex,ms])=>`<p><b>${esc(ex)}</b></p><table><tr><th>বিষয়</th><th>নম্বর</th></tr>
+      ${ms.map(m=>`<tr><td>${esc(m.subjects?m.subjects.name:'')}</td><td>${m.marks}</td></tr>`).join('')}</table>`).join('') : '<div class="msg">এখনো কোনো ফলাফল নেই।</div>'}</div>
+    <div class="box"><h2>জমার ইতিহাস</h2>
+    ${pays&&pays.length? `<table><tr><th>তারিখ</th><th>পরিমাণ</th></tr>${pays.map(x=>`<tr><td>${x.pay_date||''}</td><td>৳${bnN(x.amount)}</td></tr>`).join('')}</table>`:'<div class="msg">এখনো কোনো জমা হয়নি।</div>'}</div>`;
+  window._curPage='home';
 }
 // ব্যাক বাটন চাপলে: ড্রয়ার খোলা থাকলে তা বন্ধ, অন্য পেজে থাকলে হোমে ফেরত,
 // হোমে থাকলে অ্যাপেই থাকবে — কখনো সরাসরি বের হয়ে যাবে না।
@@ -737,12 +790,23 @@ function printReceipt(){
 
 /* ---------- নোটিশ ---------- */
 async function pageNotices(){
-  const {data}=await sb.from('notices').select('*').order('notice_date',{ascending:false});
-  $('page').innerHTML=`<div class="box"><h2>নোটিশ</h2>
+  const [{data},{data:sts},{data:pns}]=await Promise.all([
+    sb.from('notices').select('*').order('notice_date',{ascending:false}),
+    sb.from('students').select('id,name,roll').eq('status','active').order('roll'),
+    sb.from('personal_notices').select('*,students(name)').order('created_at',{ascending:false}).limit(20)
+  ]);
+  $('page').innerHTML=`<div class="box"><h2>নোটিশ (সবার জন্য)</h2>
     <div class="row"><input id="no_title" placeholder="শিরোনাম" style="flex:1"></div>
     <div class="row"><textarea id="no_body" placeholder="নোটিশের লেখা" style="flex:1"></textarea></div>
     <div class="row"><button class="act" onclick="addNotice()">নোটিশ দিন</button></div><div id="n_msg"></div>
-    ${data&&data.length? data.map(n=>`<div class="box"><b>${esc(n.title)}</b> <small>(${n.notice_date})</small><p>${esc(n.body)}</p></div>`).join('') : '<div class="msg">এখনো কোনো নোটিশ নেই।</div>'}</div>`;
+    ${data&&data.length? data.map(n=>`<div class="box"><b>${esc(n.title)}</b> <small>(${n.notice_date})</small><p>${esc(n.body)}</p>
+    <button class="red s" onclick="delNotice(${n.id})">মুছুন</button></div>`).join('') : '<div class="msg">এখনো কোনো নোটিশ নেই।</div>'}</div>
+    <div class="box"><h2>ব্যক্তিগত নোটিশ (একজন ছাত্রকে)</h2>
+    <div class="row"><select id="pn_student"><option value="">ছাত্র বাছুন</option>${(sts||[]).map(s=>`<option value="${s.id}">${esc(s.name)} (রোল ${s.roll??''})</option>`).join('')}</select></div>
+    <div class="row"><textarea id="pn_body" placeholder="শুধু এই ছাত্র/অভিভাবক তার লগইনে দেখবে" style="flex:1"></textarea></div>
+    <div class="row"><button class="act" onclick="addPNotice()">পাঠান</button></div><div id="pn_msg"></div>
+    ${pns&&pns.length? `<table><tr><th>ছাত্র</th><th>নোটিশ</th><th></th></tr>
+      ${pns.map(x=>`<tr><td>${esc(x.students?x.students.name:'')}</td><td>${esc(x.body)}</td><td><button class="red s" onclick="delPNotice(${x.id})">মুছুন</button></td></tr>`).join('')}</table>`:''}</div>`;
 }
 async function addNotice(){
   const title=$('no_title').value.trim(), body=$('no_body').value.trim();
@@ -750,6 +814,15 @@ async function addNotice(){
   const {error}=await sb.from('notices').insert({title,body});
   error? msg($('n_msg'),'হয়নি: '+error.message,'err') : pageNotices();
 }
+async function delNotice(id){ if(!confirm('নোটিশ মুছে ফেলবেন?')) return;
+  const {error}=await sb.from('notices').delete().eq('id',id); if(!error) pageNotices(); }
+async function addPNotice(){
+  if(!$('pn_student').value) return msg($('pn_msg'),'ছাত্র বাছুন।','err');
+  const body=$('pn_body').value.trim(); if(!body) return msg($('pn_msg'),'নোটিশ লিখুন।','err');
+  const {error}=await sb.from('personal_notices').insert({student_id:$('pn_student').value,body});
+  error? msg($('pn_msg'),'হয়নি: '+error.message,'err') : pageNotices();
+}
+async function delPNotice(id){ const {error}=await sb.from('personal_notices').delete().eq('id',id); if(!error) pageNotices(); }
 
 /* ---------- শিক্ষক ---------- */
 async function pageTeachers(){
@@ -1069,14 +1142,114 @@ async function reviewOpay(id,studentId,amount,status){
 
 /* ---------- ব্যাকআপ ---------- */
 async function pageSettings(){
-  $('page').innerHTML=`<div class="box"><h2>ব্যাকআপ</h2>
+  const isAdmin=window._role==='admin';
+  const {data:inst}=await sb.from('institution').select('*').eq('id',1).single();
+  let accountsHtml='';
+  if(isAdmin){
+    const [{data:profs},{data:teachers},{data:students}]=await Promise.all([
+      sb.from('profiles').select('*').order('created_at'),
+      sb.from('teachers').select('id,name').eq('status','active').order('name'),
+      sb.from('students').select('id,name,roll').eq('status','active').order('roll')
+    ]);
+    window._accTeachers=teachers||[]; window._accStudents=students||[];
+    accountsHtml=`<div class="box"><h2>লগইন অ্যাকাউন্ট তৈরি (শিক্ষক / ছাত্র)</h2>
+    <div class="row"><input id="ac_email" type="email" placeholder="ইমেইল"><input id="ac_pass" type="password" placeholder="পাসওয়ার্ড (অন্তত ৬ অক্ষর)"></div>
+    <div class="row"><select id="ac_role" onchange="accLinkRefresh()"><option value="teacher">শিক্ষক</option><option value="student">ছাত্র/অভিভাবক</option><option value="admin">অ্যাডমিন</option></select>
+    <select id="ac_link"></select>
+    <button class="act" onclick="createAccount()">অ্যাকাউন্ট তৈরি করুন</button></div><div id="ac_msg"></div>
+    <h3 style="margin:14px 0 6px">বর্তমান অ্যাকাউন্টসমূহ</h3>
+    ${profs&&profs.length? `<table><tr><th>নাম</th><th>ভূমিকা</th><th></th></tr>
+      ${profs.map(x=>`<tr><td>${esc(x.full_name||'(নাম নেই)')}</td><td>${{admin:'অ্যাডমিন',teacher:'শিক্ষক',student:'ছাত্র'}[x.role]||x.role}</td>
+      <td>${x.id!==me.id? `<button class="red s" onclick="removeProfile('${x.id}')">ভূমিকা তুলে নিন</button>`:''}</td></tr>`).join('')}</table>`:'<div class="msg">কোনো প্রোফাইল নেই।</div>'}</div>`;
+  }
+  $('page').innerHTML=`
+    ${isAdmin? `<div class="box"><h2>প্রতিষ্ঠানের তথ্য</h2>
+    <div class="row"><input id="in_name" placeholder="মাদ্রাসার নাম (বাংলা)" style="flex:1" value="${esc(inst?inst.name_bn||'':'')}"></div>
+    <div class="row"><input id="in_en" placeholder="Name (English)" style="flex:1" value="${esc(inst?inst.name_en||'':'')}"></div>
+    <div class="row"><input id="in_addr" placeholder="ঠিকানা" style="flex:1" value="${esc(inst?inst.address||'':'')}"></div>
+    <div class="row"><input id="in_phone" placeholder="ফোন" value="${esc(inst?inst.phone||'':'')}"><input id="in_email" placeholder="ইমেইল" style="flex:1" value="${esc(inst?inst.email||'':'')}"></div>
+    <div class="row"><input id="in_founder" placeholder="প্রতিষ্ঠাতা/মুহতামিমের নাম" style="flex:1" value="${esc(inst?inst.founder_name||'':'')}">
+    <input id="in_wa" placeholder="সাহায্যের WhatsApp নম্বর" value="${esc(inst?inst.help_whatsapp||'':'')}"></div>
+    <div class="row"><button class="act gold" onclick="saveInstitution()">সংরক্ষণ করুন</button></div><div id="in_msg"></div></div>`:''}
+    ${accountsHtml}
+    <div class="box"><h2>ব্যাকআপ ও রিস্টোর</h2>
     <p>সব টেবিলের তথ্য JSON ফাইল হিসেবে নামিয়ে রাখুন। ফ্রি প্ল্যানে অটো-ব্যাকআপ নেই, তাই মাঝে মাঝে এটা করে রাখা জরুরি।</p>
-    <button class="act" onclick="doBackup()">ব্যাকআপ ডাউনলোড করুন</button><div id="b_msg"></div></div>
+    <div class="row"><button class="act" onclick="doBackup()">ব্যাকআপ ডাউনলোড করুন</button></div><div id="b_msg"></div>
+    ${isAdmin? `<p style="margin-top:12px">ব্যাকআপ ফাইল থেকে তথ্য ফিরিয়ে আনতে (রিস্টোর):</p>
+    <div class="row"><input type="file" id="rs_file" accept=".json"><button class="act gold" onclick="doRestore()">রিস্টোর করুন</button></div><div id="rs_msg"></div>`:''}</div>
+    <div class="box"><h2>আমার পাসওয়ার্ড বদল</h2>
+    <div class="row"><input id="pw_new" type="password" placeholder="নতুন পাসওয়ার্ড (অন্তত ৬ অক্ষর)">
+    <button class="act" onclick="changeMyPassword()">বদলান</button></div><div id="pw_msg"></div></div>
     <div class="box"><h2>অ্যাকাউন্ট</h2>
-    <div class="row"><button class="act red" onclick="doLogout()">লগআউট</button></div></div>`;
+    <div class="row"><button class="act red" onclick="doLogout()">লগআউট</button></div></div>
+    ${isAdmin? `<div class="box" style="border:2px solid #b3261e"><h2 style="color:#b3261e">বিপজ্জনক: সব ডাটা মোছা</h2>
+    <p>সব ছাত্র, বিল, জমা, হাজিরা, হিসাব — সব মুছে যাবে। আগে ব্যাকআপ নিয়ে রাখুন। এই কাজ ফেরানো যাবে না।</p>
+    <div class="row"><button class="red" onclick="doWipe()">সব ডাটা মুছে ফেলুন</button></div><div id="wp_msg"></div></div>`:''}`;
+  if(isAdmin) accLinkRefresh();
+}
+function accLinkRefresh(){
+  const role=$('ac_role').value, sel=$('ac_link'); if(!sel) return;
+  if(role==='teacher') sel.innerHTML=(window._accTeachers||[]).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')||'<option value="">শিক্ষক নেই</option>';
+  else if(role==='student') sel.innerHTML=(window._accStudents||[]).map(s=>`<option value="${s.id}">${esc(s.name)} (রোল ${s.roll??''})</option>`).join('')||'<option value="">ছাত্র নেই</option>';
+  else sel.innerHTML='<option value="">(কারো সাথে যুক্ত নয়)</option>';
+}
+async function createAccount(){
+  const email=$('ac_email').value.trim(), password=$('ac_pass').value, role=$('ac_role').value, link=$('ac_link').value;
+  if(!email||password.length<6) return msg($('ac_msg'),'ইমেইল ও অন্তত ৬ অক্ষরের পাসওয়ার্ড দিন।','err');
+  const sb2=supabase.createClient(APP_CONFIG.SUPABASE_URL,APP_CONFIG.SUPABASE_ANON_KEY,{auth:{persistSession:false,storageKey:'sb-create-user'}});
+  const {data,error}=await sb2.auth.signUp({email,password});
+  if(error) return msg($('ac_msg'),'অ্যাকাউন্ট হয়নি: '+error.message,'err');
+  const uid=data.user&&data.user.id;
+  if(!uid) return msg($('ac_msg'),'অ্যাকাউন্ট তৈরি হয়েছে কিন্তু আইডি পাওয়া যায়নি — আবার চেষ্টা করুন।','err');
+  let fullName='';
+  if(role==='teacher'){ const t=(window._accTeachers||[]).find(x=>String(x.id)===String(link)); fullName=t?t.name:''; }
+  if(role==='student'){ const s=(window._accStudents||[]).find(x=>x.id===link); fullName=s?s.name:''; }
+  const {error:e2}=await sb.from('profiles').insert({id:uid,role,full_name:fullName,student_id:role==='student'?link:null});
+  if(e2) return msg($('ac_msg'),'অ্যাকাউন্ট হয়েছে কিন্তু ভূমিকা বসেনি: '+e2.message,'err');
+  if(role==='teacher'&&link) await sb.from('teachers').update({profile_id:uid}).eq('id',Number(link));
+  msg($('ac_msg'),`অ্যাকাউন্ট তৈরি হয়েছে — ${esc(email)} এখন এই পাসওয়ার্ড দিয়ে লগইন করতে পারবে (${{teacher:'শিক্ষক',student:'ছাত্র',admin:'অ্যাডমিন'}[role]})।`,'ok');
+  setTimeout(pageSettings,1500);
+}
+async function removeProfile(id){
+  if(!confirm('এই অ্যাকাউন্টের ভূমিকা তুলে নেবেন? (লগইন থাকবে, কিন্তু ঢুকতে পারবে না)')) return;
+  const {error}=await sb.from('profiles').delete().eq('id',id);
+  if(!error) pageSettings();
+}
+async function saveInstitution(){
+  const row={name_bn:$('in_name').value.trim(),name_en:$('in_en').value.trim(),address:$('in_addr').value.trim(),
+    phone:$('in_phone').value.trim(),email:$('in_email').value.trim(),founder_name:$('in_founder').value.trim(),
+    help_whatsapp:$('in_wa').value.trim(),updated_at:new Date().toISOString()};
+  const {error}=await sb.from('institution').update(row).eq('id',1);
+  if(error) return msg($('in_msg'),'হয়নি: '+error.message,'err');
+  $('instName').textContent=row.name_bn; $('tbName').textContent=row.name_bn; $('drName').textContent=row.name_bn;
+  const ch=row.name_bn.trim().charAt(0); if(ch){ $('tbAvatar').textContent=ch; $('drAvatar').textContent=ch; }
+  msg($('in_msg'),'প্রতিষ্ঠানের তথ্য সংরক্ষণ হয়েছে।','ok');
+}
+async function changeMyPassword(){
+  const pw=$('pw_new').value; if(pw.length<6) return msg($('pw_msg'),'অন্তত ৬ অক্ষরের পাসওয়ার্ড দিন।','err');
+  const {error}=await sb.auth.updateUser({password:pw});
+  error? msg($('pw_msg'),'হয়নি: '+error.message,'err') : msg($('pw_msg'),'পাসওয়ার্ড বদলানো হয়েছে।','ok');
+}
+async function doRestore(){
+  const f=$('rs_file').files[0]; if(!f) return msg($('rs_msg'),'আগে ব্যাকআপ ফাইল বাছুন।','err');
+  let j; try{ j=JSON.parse(await f.text()); }catch(e){ return msg($('rs_msg'),'ফাইলটি পড়া যায়নি — ঠিক ব্যাকআপ ফাইল দিন।','err'); }
+  const order=['institution','classes','sections','students','teachers','fee_heads','subjects','exams','routines','books','notices','bills','payments','ledger','salary_payments','attendance','teacher_attendance','marks','exam_routines','homework','personal_notices','leaves','online_payments'];
+  let ok=0, fail=[];
+  for(const t of order){ const rows=j.tables&&j.tables[t]; if(!rows||!rows.length) continue;
+    const {error}=await sb.from(t).upsert(rows); if(error) fail.push(t); else ok+=rows.length; }
+  msg($('rs_msg'),`রিস্টোর শেষ: ${bnN(ok)}টি তথ্য ফিরেছে।`+(fail.length? ' যেসব টেবিলে সমস্যা: '+fail.join(', '):''), fail.length?'err':'ok');
+}
+async function doWipe(){
+  if(!confirm('সত্যিই সব ডাটা মুছে ফেলবেন? ছাত্র, বিল, জমা, হাজিরা — সব চলে যাবে!')) return;
+  if(!confirm('শেষবার ভাবুন — এটা ফেরানো যাবে না। ব্যাকআপ নিয়েছেন তো?')) return;
+  const order=['marks','attendance','teacher_attendance','bills','payments','online_payments','personal_notices','salary_payments','exam_routines','routines','leaves','homework','notices','books','ledger','students','teachers','subjects','exams','fee_heads','sections','classes'];
+  let fail=[];
+  for(const t of order){ const {error}=await sb.from(t).delete().not('id','is',null); if(error) fail.push(t); }
+  msg($('wp_msg'), fail.length? 'কিছু টেবিল মোছা যায়নি: '+fail.join(', ') : 'সব ডাটা মোছা হয়েছে।', fail.length?'err':'ok');
+  if(!fail.length) setTimeout(()=>go('home'),1200);
 }
 async function doBackup(){
-  const tables=['institution','classes','sections','students','teachers','attendance','teacher_attendance','fee_heads','bills','payments','online_payments','ledger','salary_payments','subjects','exams','marks','exam_routines','books','homework','notices','personal_notices','leaves'];
+  const tables=['institution','classes','sections','students','teachers','attendance','teacher_attendance','fee_heads','bills','payments','online_payments','ledger','salary_payments','subjects','exams','marks','exam_routines','books','homework','notices','personal_notices','leaves','routines'];
   const out={exported_at:new Date().toISOString(),tables:{}};
   for(const t of tables){ const {data}=await sb.from(t).select('*'); out.tables[t]=data||[]; }
   const a=document.createElement('a');
