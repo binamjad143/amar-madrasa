@@ -178,7 +178,7 @@ async function pageStudents(){
     ${!cls||!cls.length? '<div class="msg">আগে জামাত তৈরি করতে হবে — ছাত্র কোন জামাতে পড়বে তা লাগবে। <button class="act gold s" onclick="go(\'classes\')">আগে জামাত তৈরি করুন</button></div>':''}
     <div class="row"><input id="ns_name" placeholder="ছাত্রের নাম"><input id="ns_roll" type="number" placeholder="রোল">
     <select id="ns_class"><option value="">জামাত বাছুন</option>${opts}</select>
-    <input id="ns_phone" placeholder="অভিভাবকের ফোন"><button class="act" onclick="addStudent()">যোগ করুন</button></div><div id="s_msg"></div></div>
+    <input id="ns_phone" placeholder="অভিভাবকের ফোন (ঐচ্ছিক)"><button class="act" onclick="addStudent()">যোগ করুন</button></div><div id="s_msg"></div></div>
     <div class="box"><h2>ছাত্রদের তালিকা (${sts?sts.length:0})</h2>
     ${sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th><th>জামাত</th><th>অভিভাবকের ফোন</th></tr>
       ${sts.map(s=>`<tr><td>${s.roll??''}</td><td>${esc(s.name)}</td><td>${esc(s.classes?s.classes.name:'')}</td><td>${esc(s.guardian_phone||'')}</td></tr>`).join('')}</table>`
@@ -223,7 +223,7 @@ function previewBulk(){
   if(!rows.length){ box.innerHTML='<div class="msg">নিচের বড় ঘরে এক লাইনে একজন করে ছাত্রের নাম লিখুন বা পেস্ট করুন — এখানে তালিকা দেখা যাবে।</div>'; return; }
   const dupCount=rows.filter(r=>r.dup).length;
   box.innerHTML=`<p><b>${rows.length} জন</b> ছাত্র পাওয়া গেছে${dupCount? ` — এর মধ্যে <b>${dupCount} জন</b> আগেই এই জামাতে আছে (হলুদ দাগ), তারা বাদ যাবে`:''}।</p>
-  <table><tr><th>রোল</th><th>নাম</th><th>অভিভাবক</th><th>ফোন</th></tr>
+  <table><tr><th>রোল</th><th>নাম</th><th>অভিভাবক (ঐচ্ছিক)</th><th>ফোন (ঐচ্ছিক)</th></tr>
   ${rows.map(r=>`<tr${r.dup?' style="background:#fff8e1"':''}><td>${r.roll}</td><td>${esc(r.name)}${r.dup?' (আগেই আছে)':''}</td><td>${esc(r.guardian||'')}</td><td>${esc(r.guardian_phone||'')}</td></tr>`).join('')}</table>`;
 }
 async function addBulk(){
