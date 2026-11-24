@@ -102,6 +102,12 @@
     nav button{padding:6px 10px;font-size:14px} .stat{min-width:44%;padding:11px}
     table{font-size:13.5px} th,td{padding:7px}
   }
+
+  @media print{
+    body:has(#printView:not(.hidden))>*:not(#printView){display:none !important}
+    #printView{position:static !important;overflow:visible !important}
+    #printView .pbar{display:none !important}
+  }
 </style>
 </head>
 <body>
@@ -166,6 +172,16 @@
     <button data-t="fees"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/></svg>বেতন</button>
     <button data-t="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.5a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.7h4l.4-2.5a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.06-.4.1-.8.1-1.2z"/></svg>সেটিংস</button>
   </div>
+</div>
+
+<!-- প্রিন্টের স্তর: আইডি কার্ড / রসিদ / রেজাল্ট শিট এখানে খোলে -->
+<div id="printView" class="hidden" style="position:fixed;inset:0;background:#fff;z-index:300;overflow:auto">
+  <style id="printStyle"></style>
+  <div class="pbar" style="position:sticky;top:0;background:#0b5d3b;padding:10px;display:flex;gap:10px;z-index:2">
+    <button class="act gold" onclick="closePrint()">← ফিরে যান</button>
+    <button class="act" style="background:#fff;color:#0b5d3b" onclick="doPrintPage()">প্রিন্ট / PDF সেভ করুন</button>
+  </div>
+  <div id="printContent"></div>
 </div>
 
 <script src="config.js"></script>
@@ -282,10 +298,34 @@ async function pageStudentHome(){
 // হোমে থাকলে অ্যাপেই থাকবে — কখনো সরাসরি বের হয়ে যাবে না।
 window.addEventListener('popstate',()=>{
   if(!$('appView') || $('appView').classList.contains('hidden')) return;
-  if($('drawerWrap').classList.contains('open')) toggleDrawer(false);
+  if(window._printOpen) closePrint();
+  else if($('drawerWrap').classList.contains('open')) toggleDrawer(false);
   else if(window._curPage && window._curPage!=='home') go('home');
   try{ history.pushState({am:1},''); }catch(e){}
 });
+// প্রিন্টের পেজ (আইডি কার্ড, রসিদ, রেজাল্ট শিট ইত্যাদি) এখন নতুন উইন্ডোতে নয়,
+// একই পেজের উপর আলাদা স্তরে খোলে — তাই ফোনের ব্যাক বাটনে অ্যাপ থেকে বের না হয়ে
+// আগের পেজে ফেরা যায়, আর উপরে "← ফিরে যান" বাটনও থাকে।
+function showPrintDoc(fullHtml){
+  const style=(fullHtml.match(/<style>([\s\S]*?)<\/style>/)||[])[1]||'';
+  let body=(fullHtml.split(/<body[^>]*>/)[1]||fullHtml).replace(/<\/body>[\s\S]*$/,'');
+  body=body.replace(/<script>[\s\S]*?<\/script>/g,'');
+  $('printStyle').textContent=style;
+  $('printContent').innerHTML=body;
+  $('printView').classList.remove('hidden');
+  window._printOpen=true;
+  try{ history.pushState({am:1,pr:1},''); }catch(e){}
+  window.scrollTo(0,0);
+}
+function closePrint(){
+  $('printView').classList.add('hidden');
+  $('printContent').innerHTML='';
+  window._printOpen=false;
+}
+function doPrintPage(){
+  if(window.AndroidPrint && AndroidPrint.printPage) AndroidPrint.printPage();
+  else window.print();
+}
 async function keepAlive(){ try{ await sb.from('keep_alive').update({last_ping:new Date().toISOString()}).eq('id',1); }catch(e){} }
 
 const PAGE_TITLES={home:'ড্যাশবোর্ড',classes:'জামাত',students:'শিক্ষার্থী',attendance:'হাজিরা',fees:'বেতন ও বকেয়া',teachers:'শিক্ষক ও কর্মচারী',ledger:'হিসাব ও অর্থ',exams:'পরীক্ষা ও ফলাফল',homework:'হোমওয়ার্ক',books:'বই ও লাইব্রেরি',opay:'অনলাইন পেমেন্ট',notices:'নোটিশ',settings:'সেটিংস ও ব্যাকআপ'};
@@ -540,8 +580,7 @@ function printIdCard(id){
     if(!s) return;
     const inst=($('tbName').textContent||'মাদ্রাসা');
     const qr='https://api.qrserver.com/v1/create-qr-code/?size=84x84&data='+encodeURIComponent('AM-'+s.id);
-    const w=window.open('','_blank');
-    w.document.write(`<html><head><title>আইডি কার্ড</title><style>body{font-family:sans-serif}.card{width:340px;border:2px solid #0b5d3b;border-radius:14px;overflow:hidden;margin:16px auto}.hd{background:#0b5d3b;color:#fff;text-align:center;padding:10px}.bd{padding:12px;display:flex;gap:12px}table td{padding:3px 6px;font-size:14px}</style></head><body>
+    showPrintDoc(`<html><head><title>আইডি কার্ড</title><style>body{font-family:sans-serif}.card{width:340px;border:2px solid #0b5d3b;border-radius:14px;overflow:hidden;margin:16px auto}.hd{background:#0b5d3b;color:#fff;text-align:center;padding:10px}.bd{padding:12px;display:flex;gap:12px}table td{padding:3px 6px;font-size:14px}</style></head><body>
     <div class="card"><div class="hd"><b>${esc(inst)}</b><br><small>ছাত্র আইডি কার্ড</small></div>
     <div class="bd"><img src="${qr}" width="84" height="84"><table>
     <tr><td>নাম</td><td><b>${esc(s.name)}</b></td></tr>
@@ -550,7 +589,7 @@ function printIdCard(id){
     <tr><td>অভিভাবক</td><td>${esc(s.guardian||'')}</td></tr>
     <tr><td>ফোন</td><td>${esc(s.guardian_phone||'')}</td></tr></table></div></div>
     <script>window.onload=()=>window.print()<\/script></body></html>`);
-    w.document.close();
+    
   });
 }
 async function printStatement(id){
@@ -564,14 +603,13 @@ async function printStatement(id){
   const paid=(pays||[]).reduce((a,x)=>a+Number(x.amount),0);
   const due=billed+Number(s.opening_due||0)-paid;
   const inst=($('tbName').textContent||'মাদ্রাসা');
-  const w=window.open('','_blank');
-  w.document.write(`<html><head><title>ছাত্রের হিসাব</title><style>body{font-family:sans-serif;padding:20px}h2{color:#0b5d3b}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:5px;font-size:14px}</style></head><body>
+  showPrintDoc(`<html><head><title>ছাত্রের হিসাব</title><style>body{font-family:sans-serif;padding:20px}h2{color:#0b5d3b}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:5px;font-size:14px}</style></head><body>
   <h2>${esc(inst)}</h2><h3>ছাত্রের হিসাব বিবরণী — ${esc(s.name)} (${esc(s.classes?s.classes.name:'')}, রোল ${s.roll??''})</h3>
   <p>মোট বিল ৳${bnN(billed)} • মোট জমা ৳${bnN(paid)} • বকেয়া <b>৳${bnN(Math.max(0,due))}</b></p>
   <h4>বিলসমূহ</h4><table><tr><th>মাস</th><th>খাত</th><th>পরিমাণ</th></tr>${(bills||[]).map(b=>`<tr><td>${b.bill_month}</td><td>${esc(b.head_name)}</td><td>৳${bnN(Number(b.amount)-Number(b.discount||0))}</td></tr>`).join('')}</table>
   <h4>জমাসমূহ</h4><table><tr><th>তারিখ</th><th>পরিমাণ</th><th>মাধ্যম</th></tr>${(pays||[]).map(x=>`<tr><td>${x.pay_date||''}</td><td>৳${bnN(x.amount)}</td><td>${esc(x.method||'')}</td></tr>`).join('')}</table>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
-  w.document.close();
+  
 }
 
 /* ---------- একসাথে পুরো ক্লাসের ছাত্র যোগ ---------- */
@@ -707,13 +745,12 @@ async function attReport(){
 function printAttReport(){
   const rows=window._arRows||[]; if(!rows.length) return alert('আগে রিপোর্ট দেখুন।');
   const inst=($('tbName').textContent||'মাদ্রাসা');
-  const w=window.open('','_blank');
-  w.document.write(`<html><head><title>হাজিরা রিপোর্ট</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}</style></head><body>
+  showPrintDoc(`<html><head><title>হাজিরা রিপোর্ট</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}</style></head><body>
   <h2>${esc(inst)}</h2><h3>মাসিক হাজিরা রিপোর্ট — ${esc(window._arMonth||'')}</h3>
   <table><tr><th>রোল</th><th>নাম</th><th>জামাত</th><th>উপস্থিত</th><th>অনুপস্থিত</th><th>দেরি</th><th>ছুটি</th></tr>
   ${rows.map(r=>`<tr><td>${r.s.roll??''}</td><td>${esc(r.s.name)}</td><td>${esc(r.s.classes?r.s.classes.name:'')}</td><td>${r.c.present}</td><td>${r.c.absent}</td><td>${r.c.late}</td><td>${r.c.leave}</td></tr>`).join('')}</table>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
-  w.document.close();
+  
 }
 
 /* ---------- বেতন ---------- */
@@ -789,8 +826,7 @@ async function takePay(studentId){
 function printReceipt(){
   const r=window._rcpt; if(!r) return;
   const inst=($('tbName').textContent||'মাদ্রাসা');
-  const w=window.open('','_blank');
-  w.document.write(`<html><head><title>রসিদ</title><style>body{font-family:sans-serif;text-align:center;padding:24px}.box{border:2px solid #0b5d3b;border-radius:12px;padding:20px;max-width:420px;margin:auto}h2{color:#0b5d3b;margin:4px}table{margin:12px auto;text-align:left}td{padding:4px 10px}</style></head><body>
+  showPrintDoc(`<html><head><title>রসিদ</title><style>body{font-family:sans-serif;text-align:center;padding:24px}.box{border:2px solid #0b5d3b;border-radius:12px;padding:20px;max-width:420px;margin:auto}h2{color:#0b5d3b;margin:4px}table{margin:12px auto;text-align:left}td{padding:4px 10px}</style></head><body>
   <div class="box"><h2>${esc(inst)}</h2><p>বেতন আদায়ের রসিদ</p><table>
   <tr><td>ছাত্র</td><td><b>${esc(r.name)}</b> (রোল ${esc(r.roll)})</td></tr>
   <tr><td>পরিমাণ</td><td><b>৳${bnN(r.amount)}</b></td></tr>
@@ -798,7 +834,7 @@ function printReceipt(){
   <tr><td>রসিদ নং</td><td>${esc(String(r.id).slice(0,8))}</td></tr></table>
   <p style="font-size:12px">ধন্যবাদ — জাযাকাল্লাহু খাইরান</p></div>
   <script>window.print()<\/script></body></html>`);
-  w.document.close();
+  
 }
 
 /* ---------- নোটিশ ---------- */
@@ -986,13 +1022,12 @@ async function addExRoutine(){
 async function delExRoutine(id){ const {error}=await sb.from('exam_routines').delete().eq('id',id); if(!error) loadExRoutines(); }
 function printExRoutines(){
   const data=window._xrData||[]; const inst=($('tbName').textContent||'মাদ্রাসা');
-  const w=window.open('','_blank');
-  w.document.write(`<html><head><title>পরীক্ষার রুটিন</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}</style></head><body>
+  showPrintDoc(`<html><head><title>পরীক্ষার রুটিন</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}</style></head><body>
   <h2>${esc(inst)}</h2><h3>পরীক্ষার রুটিন</h3>
   <table><tr><th>পরীক্ষা</th><th>তারিখ</th><th>বিষয়</th><th>সময়</th></tr>
   ${data.map(r=>`<tr><td>${esc(r.exams?r.exams.name:'')}</td><td>${r.exam_date}</td><td>${esc(r.subjects?r.subjects.name:'')}</td><td>${esc(r.time_text||'')}</td></tr>`).join('')}</table>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
-  w.document.close();
+  
 }
 async function addExam(){
   const name=$('ne_name').value.trim(); if(!name) return msg($('e_msg'),'পরীক্ষার নাম লিখুন।','err');
@@ -1044,37 +1079,34 @@ async function examResults(examId){
 async function printResultSheet(examId){
   const {exam,subs,rows,full,mm}=await examResults(examId);
   const inst=($('tbName').textContent||'মাদ্রাসা');
-  const w=window.open('','_blank');
-  w.document.write(`<html><head><title>রেজাল্ট শিট</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b;margin:3px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:5px;font-size:13px;text-align:center}</style></head><body>
+  showPrintDoc(`<html><head><title>রেজাল্ট শিট</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b;margin:3px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:5px;font-size:13px;text-align:center}</style></head><body>
   <h2>${esc(inst)}</h2><h3>${esc(exam.name)} — রেজাল্ট শিট (${esc(exam.classes?exam.classes.name:'')})</h3>
   <table><tr><th>মেধা</th><th>রোল</th><th>নাম</th>${subs.map(s=>`<th>${esc(s.name)}</th>`).join('')}<th>মোট (${full})</th><th>%</th><th>গ্রেড</th></tr>
   ${rows.map(r=>`<tr><td>${r.pos}</td><td>${r.st.roll??''}</td><td style="text-align:left">${esc(r.st.name)}</td>${subs.map(s=>`<td>${mm[r.st.id+'_'+s.id]??''}</td>`).join('')}<td><b>${r.tot}</b></td><td>${r.per}%</td><td>${r.grade}</td></tr>`).join('')}</table>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
-  w.document.close();
+  
 }
 async function printMerit(examId){
   const {exam,rows}=await examResults(examId);
   const inst=($('tbName').textContent||'মাদ্রাসা');
-  const w=window.open('','_blank');
-  w.document.write(`<html><head><title>মেধা তালিকা</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b;margin:3px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}</style></head><body>
+  showPrintDoc(`<html><head><title>মেধা তালিকা</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b;margin:3px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}</style></head><body>
   <h2>${esc(inst)}</h2><h3>${esc(exam.name)} — মেধা তালিকা (${esc(exam.classes?exam.classes.name:'')})</h3>
   <table><tr><th>মেধা স্থান</th><th>রোল</th><th>নাম</th><th>মোট নম্বর</th><th>গ্রেড</th></tr>
   ${rows.map(r=>`<tr><td>${r.pos}</td><td>${r.st.roll??''}</td><td>${esc(r.st.name)}</td><td>${r.tot}</td><td>${r.grade}</td></tr>`).join('')}</table>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
-  w.document.close();
+  
 }
 async function printCert(examId,studentId){
   const {exam,rows}=await examResults(examId);
   const r=rows.find(x=>x.st.id===studentId); if(!r) return;
   const inst=($('tbName').textContent||'মাদ্রাসা');
-  const w=window.open('','_blank');
-  w.document.write(`<html><head><title>সনদপত্র</title><style>body{font-family:serif;padding:30px}.cert{border:6px double #0b5d3b;padding:36px;text-align:center;max-width:720px;margin:auto}h1{color:#0b5d3b}p{font-size:17px;line-height:1.9}</style></head><body>
+  showPrintDoc(`<html><head><title>সনদপত্র</title><style>body{font-family:serif;padding:30px}.cert{border:6px double #0b5d3b;padding:36px;text-align:center;max-width:720px;margin:auto}h1{color:#0b5d3b}p{font-size:17px;line-height:1.9}</style></head><body>
   <div class="cert"><h1>${esc(inst)}</h1><h2>সনদপত্র</h2>
   <p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, <b>${esc(r.st.name)}</b>, জামাত: ${esc(exam.classes?exam.classes.name:'')}, রোল: ${r.st.roll??''} — অত্র মাদ্রাসার একজন নিয়মিত ছাত্র। সে <b>${esc(exam.name)}</b> পরীক্ষায় অংশগ্রহণ করে মোট <b>${r.tot}</b> নম্বর পেয়ে <b>${r.grade}</b> গ্রেডে উত্তীর্ণ হয়েছে এবং মেধা তালিকায় <b>${r.pos}</b>তম স্থান অর্জন করেছে।</p>
   <p>আমি তার উজ্জ্বল ভবিষ্যৎ কামনা করি।</p>
   <p style="text-align:right;margin-top:40px">______________<br>প্রধান শিক্ষক / মুহতামিম</p></div>
   <script>window.onload=()=>window.print()<\/script></body></html>`);
-  w.document.close();
+  
 }
 async function addSubject(classId,examId){
   const name=$('nsj_name').value.trim(); if(!name) return msg($('m_msg'),'বিষয়ের নাম লিখুন।','err');
