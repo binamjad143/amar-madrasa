@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>আমার মাদ্রাসা — অনলাইন</title>
+<title>আমার মাদ্রাসা</title>
+<link rel="icon" type="image/png" href="logo.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
@@ -106,12 +107,13 @@
 <body>
 <header>
   <h1 id="instName">দারুল আরকাম মডেল মাদ্রাসা</h1>
-  <p>আমার মাদ্রাসা — অনলাইন সংস্করণ</p>
+  <p>আমার মাদ্রাসা</p>
 </header>
 
 <!-- লগইন -->
 <div id="loginView" class="hidden" style="max-width:420px;margin:24px auto;padding:0 10px">
   <div class="box">
+    <div style="text-align:center"><img src="logo.png" alt="আমার মাদ্রাসা" style="width:96px;height:96px;border-radius:22px"></div>
     <h2>লগইন করুন</h2>
     <div id="cfgWarn" class="msg err hidden">সার্ভারের সাথে সংযোগ সেট করা হয়নি (config.js-এ Project URL ও anon key বসাতে হবে)।</div>
     <div class="row"><input id="li_email" type="email" placeholder="ইমেইল" style="flex:1"></div>
