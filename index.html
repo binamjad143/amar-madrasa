@@ -80,7 +80,12 @@ function init(){
   }
   sb = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_ANON_KEY);
   sb.auth.getSession().then(({data})=>{ data.session? enterApp(data.session.user) : $('loginView').classList.remove('hidden'); });
-  sb.auth.onAuthStateChange((_e,session)=>{ session? enterApp(session.user) : location.reload(); });
+  // শুধু লগআউট হলেই পেজ রিলোড হবে — লগইন-ছাড়া অবস্থায় রিলোড করলে পেজ বারবার
+  // রিলোড হয়ে লেখার ঘরে টাচ/ফোকাস কাজ করে না (২০২৬-১১-২৪-এ ধরা পড়া বাগ)।
+  sb.auth.onAuthStateChange((event,session)=>{
+    if(event==='SIGNED_IN'&&session&&!me) enterApp(session.user);
+    else if(event==='SIGNED_OUT') location.reload();
+  });
 }
 async function doLogin(){
   msg($('li_msg'),'');
