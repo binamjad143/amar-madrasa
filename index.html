@@ -207,14 +207,25 @@ async function enterApp(user){
     const ch=data.name_bn.trim().charAt(0); $('tbAvatar').textContent=ch; $('drAvatar').textContent=ch; }
   document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>go(b.dataset.t));
   go('home');
+  // ফোনের ব্যাক বাটন: অ্যাপ থেকে বের না হয়ে হোমে ফিরবে (নিচের popstate দেখুন)
+  try{ history.pushState({am:1},''); }catch(e){}
   keepAlive();
 }
+// ব্যাক বাটন চাপলে: ড্রয়ার খোলা থাকলে তা বন্ধ, অন্য পেজে থাকলে হোমে ফেরত,
+// হোমে থাকলে অ্যাপেই থাকবে — কখনো সরাসরি বের হয়ে যাবে না।
+window.addEventListener('popstate',()=>{
+  if(!$('appView') || $('appView').classList.contains('hidden')) return;
+  if($('drawerWrap').classList.contains('open')) toggleDrawer(false);
+  else if(window._curPage && window._curPage!=='home') go('home');
+  try{ history.pushState({am:1},''); }catch(e){}
+});
 async function keepAlive(){ try{ await sb.from('keep_alive').update({last_ping:new Date().toISOString()}).eq('id',1); }catch(e){} }
 
 const PAGE_TITLES={home:'ড্যাশবোর্ড',classes:'জামাত',students:'শিক্ষার্থী',attendance:'হাজিরা',fees:'বেতন ও বকেয়া',teachers:'শিক্ষক ও কর্মচারী',ledger:'হিসাব ও অর্থ',exams:'পরীক্ষা ও ফলাফল',homework:'হোমওয়ার্ক',opay:'অনলাইন পেমেন্ট',notices:'নোটিশ',settings:'সেটিংস ও ব্যাকআপ'};
 function toggleDrawer(open){ $('drawerWrap').classList.toggle('open',!!open); }
 function go(t){
   toggleDrawer(false);
+  window._curPage=t;
   document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   $('tbPage').textContent=PAGE_TITLES[t]||'ড্যাশবোর্ড';
   window.scrollTo(0,0);
