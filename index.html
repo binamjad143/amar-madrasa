@@ -19,7 +19,7 @@
   header p{margin:4px 0 0;opacity:.92;font-size:14px;position:relative}
   header p::before{content:"";display:block;width:64px;height:3px;background:var(--gold);border-radius:2px;margin:0 auto 8px}
   /* মেনু */
-  nav{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;background:#073d27f2;padding:8px 6px;box-shadow:0 2px 8px #0003;backdrop-filter:blur(4px)}
+  nav{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;background:#073d27f2;padding:8px 10px;box-shadow:0 2px 8px #0003;backdrop-filter:blur(4px)}
   nav button{background:#ffffff14;color:#fff;border:1px solid #ffffff22;padding:7px 13px;border-radius:999px;font:inherit;font-size:15px;cursor:pointer;transition:.15s}
   nav button:hover{background:#ffffff2b}
   nav button.on{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#221a00;font-weight:700;border-color:transparent;box-shadow:0 2px 6px #0004}
@@ -85,18 +85,9 @@
 <div id="appView" class="hidden">
   <nav id="tabs">
     <button data-t="home" class="on">হোম</button>
-    <button data-t="classes">জামাত</button>
-    <button data-t="students">ছাত্র</button>
     <button data-t="attendance">হাজিরা</button>
     <button data-t="fees">বেতন</button>
-    <button data-t="teachers">শিক্ষক</button>
-    <button data-t="ledger">হিসাব</button>
-    <button data-t="exams">পরীক্ষা</button>
-    <button data-t="homework">হোমওয়ার্ক</button>
-    <button data-t="opay">অনলাইন পেমেন্ট</button>
-    <button data-t="notices">নোটিশ</button>
-    <button data-t="backup">ব্যাকআপ</button>
-    <button onclick="doLogout()">লগআউট</button>
+    <button data-t="settings">সেটিংস</button>
   </nav>
   <main id="page"></main>
 </div>
@@ -149,7 +140,7 @@ async function keepAlive(){ try{ await sb.from('keep_alive').update({last_ping:n
 
 function go(t){
   document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
-  ({home:pageHome,classes:pageClasses,students:pageStudents,attendance:pageAttendance,fees:pageFees,teachers:pageTeachers,ledger:pageLedger,exams:pageExams,homework:pageHomework,opay:pageOpay,notices:pageNotices,backup:pageBackup}[t]||pageHome)();
+  ({home:pageHome,classes:pageClasses,students:pageStudents,attendance:pageAttendance,fees:pageFees,teachers:pageTeachers,ledger:pageLedger,exams:pageExams,homework:pageHomework,opay:pageOpay,notices:pageNotices,settings:pageSettings,backup:pageSettings}[t]||pageHome)();
 }
 
 /* ---------- হোম ---------- */
@@ -171,7 +162,23 @@ async function pageHome(){
     <div class="box"><h2>শুরুটা এখান থেকে করুন</h2>
     <p>১) আগে জামাত তৈরি করুন → ২) তারপর ছাত্র যোগ করুন → ৩) হাজিরা ও বেতন চালু হবে।</p>
     <div class="row"><button class="act gold" onclick="go('classes')">আগে জামাত তৈরি করুন</button>
-    <button class="act" onclick="go('students')">ছাত্র যোগ করুন</button></div></div>`;
+    <button class="act" onclick="go('students')">ছাত্র যোগ করুন</button></div></div>
+    <div class="box"><h2>সব বিভাগ</h2>
+    <style>.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+    .menu-grid button{background:linear-gradient(160deg,#fff,#eef6f1);border:1.5px solid #cfe3d6;border-radius:14px;padding:18px 8px;font:inherit;font-size:17px;font-weight:700;color:#0b5d3b;cursor:pointer;box-shadow:0 2px 6px #0b5d3b12}
+    .menu-grid button:active{transform:scale(.97)}</style>
+    <div class="menu-grid">
+      <button onclick="go('classes')">জামাত</button>
+      <button onclick="go('students')">ছাত্র</button>
+      <button onclick="go('attendance')">হাজিরা</button>
+      <button onclick="go('fees')">বেতন</button>
+      <button onclick="go('teachers')">শিক্ষক</button>
+      <button onclick="go('ledger')">হিসাব</button>
+      <button onclick="go('exams')">পরীক্ষা</button>
+      <button onclick="go('homework')">হোমওয়ার্ক</button>
+      <button onclick="go('opay')">অনলাইন পেমেন্ট</button>
+      <button onclick="go('notices')">নোটিশ</button>
+    </div></div>`;
 }
 
 /* ---------- জামাত ---------- */
@@ -529,10 +536,12 @@ async function reviewOpay(id,studentId,amount,status){
 }
 
 /* ---------- ব্যাকআপ ---------- */
-async function pageBackup(){
+async function pageSettings(){
   $('page').innerHTML=`<div class="box"><h2>ব্যাকআপ</h2>
     <p>সব টেবিলের তথ্য JSON ফাইল হিসেবে নামিয়ে রাখুন। ফ্রি প্ল্যানে অটো-ব্যাকআপ নেই, তাই মাঝে মাঝে এটা করে রাখা জরুরি।</p>
-    <button class="act" onclick="doBackup()">ব্যাকআপ ডাউনলোড করুন</button><div id="b_msg"></div></div>`;
+    <button class="act" onclick="doBackup()">ব্যাকআপ ডাউনলোড করুন</button><div id="b_msg"></div></div>
+    <div class="box"><h2>অ্যাকাউন্ট</h2>
+    <div class="row"><button class="act red" onclick="doLogout()">লগআউট</button></div></div>`;
 }
 async function doBackup(){
   const tables=['institution','classes','sections','students','teachers','attendance','teacher_attendance','fee_heads','bills','payments','online_payments','ledger','salary_payments','subjects','exams','marks','exam_routines','books','homework','notices','personal_notices','leaves'];
