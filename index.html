@@ -108,6 +108,7 @@
 <header>
   <h1 id="instName">দারুল আরকাম মডেল মাদ্রাসা</h1>
   <p>আমার মাদ্রাসা</p>
+  <p id="instAddr" style="margin:2px 0 0;font-size:14px;color:#ffe9a8"></p>
 </header>
 
 <!-- লগইন -->
@@ -136,7 +137,7 @@
     <div class="scrim" onclick="toggleDrawer(false)"></div>
     <div class="drawer">
       <div class="dhead"><div class="avatar" id="drAvatar">দ</div>
-        <div><b id="drName">দারুল আরকাম মডেল মাদ্রাসা</b><span>অনলাইন প্যানেল</span></div>
+        <div><b id="drName">দারুল আরকাম মডেল মাদ্রাসা</b><span id="drAddr">অনলাইন প্যানেল</span></div>
         <button class="dclose" onclick="toggleDrawer(false)">✕</button></div>
       <div class="dsec">প্রধান</div>
       <button class="ditem" data-t="home">ড্যাশবোর্ড</button>
@@ -179,6 +180,8 @@ function init(){
     $('loginView').classList.remove('hidden'); $('cfgWarn').classList.remove('hidden'); return;
   }
   sb = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_ANON_KEY);
+  // লগইনের আগেও হেডারে প্রতিষ্ঠানের নাম ও ঠিকানা দেখানোর জন্য (institution সবার জন্য পড়া যায়)
+  sb.from('institution').select('*').eq('id',1).single().then(({data})=>applyInstitution(data));
   sb.auth.getSession().then(({data})=>{ data.session? enterApp(data.session.user) : $('loginView').classList.remove('hidden'); });
   // শুধু লগআউট হলেই পেজ রিলোড হবে — লগইন-ছাড়া অবস্থায় রিলোড করলে পেজ বারবার
   // রিলোড হয়ে লেখার ঘরে টাচ/ফোকাস কাজ করে না (২০২৬-১১-২৪-এ ধরা পড়া বাগ)।
@@ -203,11 +206,19 @@ async function doSignup(){
 }
 async function doLogout(){ await sb.auth.signOut(); location.reload(); }
 
+function applyInstitution(data){
+  if(!data) return;
+  window._inst=data;
+  if(data.name_bn){ $('instName').textContent=data.name_bn; $('tbName').textContent=data.name_bn; $('drName').textContent=data.name_bn;
+    const ch=data.name_bn.trim().charAt(0); $('tbAvatar').textContent=ch; $('drAvatar').textContent=ch; }
+  const addr=(data.address||'').trim();
+  if($('instAddr')) $('instAddr').textContent=addr;
+  if($('drAddr')) $('drAddr').textContent=addr||'অনলাইন প্যানেল';
+}
 async function enterApp(user){
   me=user; $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden');
   const {data}=await sb.from('institution').select('*').eq('id',1).single();
-  if(data&&data.name_bn){ $('instName').textContent=data.name_bn; $('tbName').textContent=data.name_bn; $('drName').textContent=data.name_bn;
-    const ch=data.name_bn.trim().charAt(0); $('tbAvatar').textContent=ch; $('drAvatar').textContent=ch; }
+  applyInstitution(data);
   document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>go(b.dataset.t));
   // ভূমিকা (রোল) অনুযায়ী প্যানেল: admin সব, teacher আংশিক, student শুধু নিজের তথ্য
   const {data:prof}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
@@ -328,7 +339,7 @@ async function pageHome(){
   <div class="hero">
     <div class="logo">${esc(instName.charAt(0))}</div>
     <h2>${esc(instName)}</h2>
-    <div class="loc">অনলাইন প্যানেল</div>
+    <div class="loc">${esc(window._inst&&window._inst.address? window._inst.address:'অনলাইন প্যানেল')}</div>
     <div><span class="datepill">🕐 ${esc(dateStr)} • ${esc(timeStr)}</span></div>
     <div class="minis">
       <div class="mini"><div class="lb">মোট উপস্থিতি</div><div class="vl">${bnN(present)}/${bnN(students)}</div><div class="sub">${marked? 'আজ হাজিরা নেওয়া হয়েছে':'আজ হাজিরা নেওয়া হয়নি'}</div></div>
@@ -1223,8 +1234,7 @@ async function saveInstitution(){
     help_whatsapp:$('in_wa').value.trim(),updated_at:new Date().toISOString()};
   const {error}=await sb.from('institution').update(row).eq('id',1);
   if(error) return msg($('in_msg'),'হয়নি: '+error.message,'err');
-  $('instName').textContent=row.name_bn; $('tbName').textContent=row.name_bn; $('drName').textContent=row.name_bn;
-  const ch=row.name_bn.trim().charAt(0); if(ch){ $('tbAvatar').textContent=ch; $('drAvatar').textContent=ch; }
+  applyInstitution(row);
   msg($('in_msg'),'প্রতিষ্ঠানের তথ্য সংরক্ষণ হয়েছে।','ok');
 }
 async function changeMyPassword(){
