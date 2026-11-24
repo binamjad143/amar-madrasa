@@ -147,6 +147,7 @@
       <button class="ditem" data-t="ledger">হিসাব ও অর্থ</button>
       <button class="ditem" data-t="exams">পরীক্ষা ও ফলাফল</button>
       <button class="ditem" data-t="homework">হোমওয়ার্ক</button>
+      <button class="ditem" data-t="books">বই ও লাইব্রেরি</button>
       <button class="ditem" data-t="opay">অনলাইন পেমেন্ট</button>
       <button class="ditem" data-t="notices">নোটিশ</button>
       <div class="dsec">অন্যান্য</div>
@@ -221,7 +222,7 @@ window.addEventListener('popstate',()=>{
 });
 async function keepAlive(){ try{ await sb.from('keep_alive').update({last_ping:new Date().toISOString()}).eq('id',1); }catch(e){} }
 
-const PAGE_TITLES={home:'ড্যাশবোর্ড',classes:'জামাত',students:'শিক্ষার্থী',attendance:'হাজিরা',fees:'বেতন ও বকেয়া',teachers:'শিক্ষক ও কর্মচারী',ledger:'হিসাব ও অর্থ',exams:'পরীক্ষা ও ফলাফল',homework:'হোমওয়ার্ক',opay:'অনলাইন পেমেন্ট',notices:'নোটিশ',settings:'সেটিংস ও ব্যাকআপ'};
+const PAGE_TITLES={home:'ড্যাশবোর্ড',classes:'জামাত',students:'শিক্ষার্থী',attendance:'হাজিরা',fees:'বেতন ও বকেয়া',teachers:'শিক্ষক ও কর্মচারী',ledger:'হিসাব ও অর্থ',exams:'পরীক্ষা ও ফলাফল',homework:'হোমওয়ার্ক',books:'বই ও লাইব্রেরি',opay:'অনলাইন পেমেন্ট',notices:'নোটিশ',settings:'সেটিংস ও ব্যাকআপ'};
 function toggleDrawer(open){ $('drawerWrap').classList.toggle('open',!!open); }
 function go(t){
   toggleDrawer(false);
@@ -229,7 +230,7 @@ function go(t){
   document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   $('tbPage').textContent=PAGE_TITLES[t]||'ড্যাশবোর্ড';
   window.scrollTo(0,0);
-  ({home:pageHome,classes:pageClasses,students:pageStudents,attendance:pageAttendance,fees:pageFees,teachers:pageTeachers,ledger:pageLedger,exams:pageExams,homework:pageHomework,opay:pageOpay,notices:pageNotices,settings:pageSettings,backup:pageSettings}[t]||pageHome)();
+  ({home:pageHome,classes:pageClasses,students:pageStudents,attendance:pageAttendance,fees:pageFees,teachers:pageTeachers,ledger:pageLedger,exams:pageExams,homework:pageHomework,books:pageBooks,opay:pageOpay,notices:pageNotices,settings:pageSettings,backup:pageSettings}[t]||pageHome)();
 }
 
 /* ---------- হোম ---------- */
@@ -262,8 +263,8 @@ async function pageHome(){
   (od.data||[]).forEach(s=>perOpen[s.id]=Number(s.opening_due||0));
   let dues=0; const dueStudents=new Set();
   new Set([...Object.keys(perBill),...Object.keys(perOpen)]).forEach(id=>{ const d=(perBill[id]||0)-(perPay[id]||0)+(perOpen[id]||0); if(d>0){ dues+=d; dueStudents.add(id); } });
-  const income=sum((led.data||[]).filter(r=>r.type==='income'),r=>r.amount)+allCollected;
-  const expense=sum((led.data||[]).filter(r=>r.type==='expense'),r=>r.amount);
+  const income=sum((led.data||[]).filter(r=>r.kind==='income'),r=>r.amount)+allCollected;
+  const expense=sum((led.data||[]).filter(r=>r.kind==='expense'),r=>r.amount);
   const instName=($('tbName').textContent||'মাদ্রাসা').trim();
   let dateStr='', timeStr='';
   try{ dateStr=new Intl.DateTimeFormat('bn-BD',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(now);
@@ -300,9 +301,20 @@ async function pageHome(){
 /* ---------- জামাত ---------- */
 async function pageClasses(){
   const p=$('page');
-  const {data}=await sb.from('classes').select('*').order('sort_order');
+  const [{data},{data:secs},{data:cnt}]=await Promise.all([
+    sb.from('classes').select('*').order('sort_order'),
+    sb.from('sections').select('*').order('id'),
+    sb.from('students').select('class_id').eq('status','active')
+  ]);
+  const secMap={}; (secs||[]).forEach(s=>{ (secMap[s.class_id]=secMap[s.class_id]||[]).push(s); });
+  const cntMap={}; (cnt||[]).forEach(s=>cntMap[s.class_id]=(cntMap[s.class_id]||0)+1);
   p.innerHTML=`<div class="box"><h2>জামাতের তালিকা</h2>
-    ${data&&data.length? `<table><tr><th>জামাত</th><th>মাসিক বেতন</th></tr>${data.map(c=>`<tr><td>${esc(c.name)}</td><td>৳${c.monthly_fee}</td></tr>`).join('')}</table>`
+    ${data&&data.length? `<table><tr><th>জামাত</th><th>মাসিক বেতন</th><th>ছাত্র</th><th>শাখা</th><th>কাজ</th></tr>
+      ${data.map(c=>`<tr><td><b>${esc(c.name)}</b></td><td>৳${bnN(c.monthly_fee)}</td><td>${bnN(cntMap[c.id]||0)} জন</td>
+      <td>${(secMap[c.id]||[]).map(s=>`${esc(s.name)} <a href="#" onclick="delSection(${s.id});return false" style="color:#b3261e">✕</a>`).join(', ')||'—'}
+      <div class="row"><input id="sec_${c.id}" placeholder="নতুন শাখা (ক/খ/গ)" style="width:130px"><button class="act s" onclick="addSection('${c.id}')">শাখা যোগ</button></div></td>
+      <td><button class="act s gold" onclick="editClassFee('${c.id}',${Number(c.monthly_fee||0)})">ফি বদলান</button>
+      <button class="red s" onclick="delClass('${c.id}','${esc(c.name)}')">মুছুন</button></td></tr>`).join('')}</table>`
       : '<div class="msg">এখনো কোনো জামাত তৈরি হয়নি। নিচের ঘরে নাম লিখে “যোগ করুন” চাপ দিন।</div>'}
     <div class="row"><input id="nc_name" placeholder="জামাতের নাম (যেমন: নাজেরা)"><input id="nc_fee" type="number" placeholder="মাসিক বেতন (৳)" value="300">
     <button class="act" onclick="addClass()">যোগ করুন</button></div><div id="c_msg"></div></div>`;
@@ -311,6 +323,23 @@ async function addClass(){
   const name=$('nc_name').value.trim(); if(!name) return msg($('c_msg'),'জামাতের নাম লিখুন।','err');
   const {error}=await sb.from('classes').insert({name,monthly_fee:Number($('nc_fee').value||0),sort_order:Date.now()%100000});
   error? msg($('c_msg'),'হয়নি: '+error.message,'err') : pageClasses();
+}
+async function addSection(classId){
+  const name=$('sec_'+classId).value.trim(); if(!name) return;
+  const {error}=await sb.from('sections').insert({class_id:classId,name});
+  error? alert('হয়নি: '+error.message) : pageClasses();
+}
+async function delSection(id){ if(!confirm('এই শাখা মুছে ফেলবেন?')) return;
+  const {error}=await sb.from('sections').delete().eq('id',id); if(!error) pageClasses(); }
+async function editClassFee(id,cur){
+  const v=prompt('মাসিক বেতন (৳) লিখুন:',cur); if(v===null) return;
+  const {error}=await sb.from('classes').update({monthly_fee:Number(v||0)}).eq('id',id);
+  error? alert('হয়নি: '+error.message) : pageClasses();
+}
+async function delClass(id,name){
+  if(!confirm(`“${name}” জামাত মুছে ফেলবেন? ওই জামাতে ছাত্র থাকলে মোছা যাবে না।`)) return;
+  const {error}=await sb.from('classes').delete().eq('id',id);
+  error? alert('মোছা যায়নি: '+error.message) : pageClasses();
 }
 
 /* ---------- ছাত্র ---------- */
@@ -560,7 +589,12 @@ async function pageAttendance(){
     <div class="row"><select id="at_class"><option value="">সব জামাত</option>${opts}</select>
     <button class="act s" onclick="allPresent()">সবাইকে উপস্থিত করুন</button></div>
     <div id="att_body"></div>
-    <div id="a_msg"></div></div>`;
+    <div id="a_msg"></div></div>
+    <div class="box"><h2>মাসিক হাজিরা রিপোর্ট</h2>
+    <div class="row"><input id="ar_month" type="month" value="${today.slice(0,7)}">
+    <button class="act" onclick="attReport()">রিপোর্ট দেখুন</button>
+    <button class="act gold" onclick="printAttReport()">প্রিন্ট করুন</button></div>
+    <div id="ar_out"><div class="msg">মাস বেছে “রিপোর্ট দেখুন” চাপ দিন — কোন ছাত্র কতদিন উপস্থিত/অনুপস্থিত ছিল দেখা যাবে।</div></div></div>`;
   const sel=$('at_class'); sel.value=window._atCls||''; sel.onchange=()=>{window._atCls=sel.value||null; pageAttendance();};
   renderAtt();
   if(window._attSavedCount) msg($('a_msg'),`আজকের হাজিরা আগেই সংরক্ষণ করা আছে (${window._attSavedCount} জনের) — বদলালে আবার সংরক্ষণ করুন।`,'ok');
@@ -589,6 +623,31 @@ async function saveAttendance(){
   if(error) return msg($('a_msg'),'সংরক্ষণ হয়নি: '+error.message,'err');
   const cnt={present:0,absent:0,late:0,leave:0}; rows.forEach(r=>cnt[r.status]++);
   msg($('a_msg'),`হাজিরা সংরক্ষণ হয়েছে — মোট ${rows.length} জন: উপস্থিত ${cnt.present}, অনুপস্থিত ${cnt.absent}${cnt.late?`, দেরি ${cnt.late}`:''}${cnt.leave?`, ছুটি ${cnt.leave}`:''}।`,'ok');
+}
+async function attReport(){
+  const month=($('ar_month').value||new Date().toISOString().slice(0,7));
+  const [{data:sts},{data:att}]=await Promise.all([
+    sb.from('students').select('*,classes(name)').eq('status','active').order('roll'),
+    sb.from('attendance').select('student_id,status,att_date').gte('att_date',month+'-01').lte('att_date',month+'-31')
+  ]);
+  const per={}; (att||[]).forEach(a=>{ const o=per[a.student_id]=per[a.student_id]||{present:0,absent:0,late:0,leave:0}; o[a.status]=(o[a.status]||0)+1; });
+  const rows=(sts||[]).filter(s=>!window._atCls||s.class_id===window._atCls).map(s=>({s,c:per[s.id]||{present:0,absent:0,late:0,leave:0}}));
+  window._arRows=rows; window._arMonth=month;
+  $('ar_out').innerHTML= rows.length? `<table><tr><th>রোল</th><th>নাম</th><th>জামাত</th><th>উপস্থিত</th><th>অনুপস্থিত</th><th>দেরি</th><th>ছুটি</th></tr>
+    ${rows.map(r=>`<tr><td>${r.s.roll??''}</td><td>${esc(r.s.name)}</td><td>${esc(r.s.classes?r.s.classes.name:'')}</td>
+    <td>${bnN(r.c.present)}</td><td>${bnN(r.c.absent)}</td><td>${bnN(r.c.late)}</td><td>${bnN(r.c.leave)}</td></tr>`).join('')}</table>`
+    : '<div class="msg">ছাত্র নেই।</div>';
+}
+function printAttReport(){
+  const rows=window._arRows||[]; if(!rows.length) return alert('আগে রিপোর্ট দেখুন।');
+  const inst=($('tbName').textContent||'মাদ্রাসা');
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>হাজিরা রিপোর্ট</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}</style></head><body>
+  <h2>${esc(inst)}</h2><h3>মাসিক হাজিরা রিপোর্ট — ${esc(window._arMonth||'')}</h3>
+  <table><tr><th>রোল</th><th>নাম</th><th>জামাত</th><th>উপস্থিত</th><th>অনুপস্থিত</th><th>দেরি</th><th>ছুটি</th></tr>
+  ${rows.map(r=>`<tr><td>${r.s.roll??''}</td><td>${esc(r.s.name)}</td><td>${esc(r.s.classes?r.s.classes.name:'')}</td><td>${r.c.present}</td><td>${r.c.absent}</td><td>${r.c.late}</td><td>${r.c.leave}</td></tr>`).join('')}</table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
 }
 
 /* ---------- বেতন ---------- */
@@ -701,10 +760,55 @@ async function pageTeachers(){
     <button class="act" onclick="addTeacher()">যোগ করুন</button></div><div id="t_msg"></div></div>
     <div class="box"><h2>শিক্ষকদের তালিকা (${data?data.length:0})</h2>
     ${data&&data.length? `<table><tr><th>নাম</th><th>পদ</th><th>ফোন</th><th>বেতন</th><th>বেতন দিন</th></tr>
-      ${data.map(t=>`<tr><td>${esc(t.name)}</td><td>${esc(t.post||'')}</td><td>${esc(t.phone||'')}</td><td>৳${t.salary}</td>
-      <td><button class="act s" onclick="paySalary('${t.id}',${Number(t.salary||0)})">এই মাসের বেতন দিন</button></td></tr>`).join('')}</table>`
-      : '<div class="msg">এখনো কোনো শিক্ষক যোগ হয়নি। উপরের ফরমে যোগ করুন।</div>'}<div id="t2_msg"></div></div>`;
+      ${data.map(t=>`<tr><td>${esc(t.name)}</td><td>${esc(t.post||'')}</td><td>${esc(t.phone||'')}</td><td>৳${bnN(t.salary)}</td>
+      <td><button class="act s" onclick="paySalary(${t.id},${Number(t.salary||0)})">এই মাসের বেতন দিন</button> <button class="red s" onclick="delTeacher(${t.id})">বাদ দিন</button></td></tr>`).join('')}</table>`
+      : '<div class="msg">এখনো কোনো শিক্ষক যোগ হয়নি। উপরের ফরমে যোগ করুন।</div>'}<div id="t2_msg"></div></div>
+    <div class="box"><h2>শিক্ষক হাজিরা (আজ)</h2><div id="tatt">লোড হচ্ছে…</div></div>
+    <div class="box"><h2>ক্লাস রুটিন (শিক্ষক)</h2>
+    <div class="row"><select id="rt_teacher"><option value="">শিক্ষক বাছুন</option>${(data||[]).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
+    <select id="rt_day"><option>শনিবার</option><option>রবিবার</option><option>সোমবার</option><option>মঙ্গলবার</option><option>বুধবার</option><option>বৃহস্পতিবার</option><option>শুক্রবার</option></select>
+    <input id="rt_time" placeholder="সময় (যেমন: সকাল ৯টা)"><input id="rt_sub" placeholder="বিষয়/জামাত"></div>
+    <div class="row"><button class="act" onclick="addRoutine()">রুটিন যোগ করুন</button></div><div id="rt_msg"></div><div id="rt_list">লোড হচ্ছে…</div></div>`;
+  loadTeacherAtt(); loadRoutines();
 }
+async function delTeacher(id){ if(!confirm('এই শিক্ষককে বাদ দেবেন? (তালিকা থেকে সরে যাবে)')) return;
+  const {error}=await sb.from('teachers').update({status:'inactive'}).eq('id',id); if(!error) pageTeachers(); }
+async function loadTeacherAtt(){
+  const el=$('tatt'); if(!el) return;
+  const today=new Date().toISOString().slice(0,10);
+  const [{data:ts},{data:att}]=await Promise.all([
+    sb.from('teachers').select('*').eq('status','active').order('name'),
+    sb.from('teacher_attendance').select('*').eq('att_date',today)
+  ]);
+  const m={}; (att||[]).forEach(a=>m[a.teacher_id]=a.status);
+  window._tatt={}; (ts||[]).forEach(t=>window._tatt[t.id]=m[t.id]||'present');
+  el.innerHTML= ts&&ts.length? `<table><tr><th>নাম</th><th>অবস্থা</th></tr>
+    ${ts.map(t=>`<tr><td>${esc(t.name)}</td><td><select id="ta_${t.id}">
+      ${['present','absent','late','leave'].map(v=>`<option value="${v}" ${window._tatt[t.id]===v?'selected':''}>${{present:'উপস্থিত',absent:'অনুপস্থিত',late:'দেরি',leave:'ছুটি'}[v]}</option>`).join('')}</select></td></tr>`).join('')}</table>
+    <div class="row"><button class="act gold" onclick="saveTeacherAtt()">শিক্ষক হাজিরা সংরক্ষণ করুন</button></div><div id="ta_msg"></div>`
+    : '<div class="msg">শিক্ষক নেই।</div>';
+}
+async function saveTeacherAtt(){
+  const today=new Date().toISOString().slice(0,10);
+  const rows=Object.keys(window._tatt||{}).map(id=>({teacher_id:Number(id),att_date:today,status:$('ta_'+id).value}));
+  if(!rows.length) return;
+  const {error}=await sb.from('teacher_attendance').upsert(rows,{onConflict:'teacher_id,att_date'});
+  error? msg($('ta_msg'),'হয়নি: '+error.message,'err') : msg($('ta_msg'),'শিক্ষক হাজিরা সংরক্ষণ হয়েছে।','ok');
+}
+async function loadRoutines(){
+  const el=$('rt_list'); if(!el) return;
+  const {data,error}=await sb.from('routines').select('*,teachers(name)').order('id');
+  if(error){ el.innerHTML='<div class="msg">রুটিনের টেবিল এখনো তৈরি হয়নি — শীঘ্রই চালু হচ্ছে।</div>'; return; }
+  el.innerHTML= data&&data.length? `<table><tr><th>শিক্ষক</th><th>বার</th><th>সময়</th><th>বিষয়/জামাত</th><th></th></tr>
+    ${data.map(r=>`<tr><td>${esc(r.teachers?r.teachers.name:'')}</td><td>${esc(r.day)}</td><td>${esc(r.time_text||'')}</td><td>${esc(r.subject||'')}</td>
+    <td><button class="red s" onclick="delRoutine(${r.id})">মুছুন</button></td></tr>`).join('')}</table>` : '<div class="msg">এখনো কোনো রুটিন নেই।</div>';
+}
+async function addRoutine(){
+  if(!$('rt_teacher').value) return msg($('rt_msg'),'শিক্ষক বাছুন।','err');
+  const {error}=await sb.from('routines').insert({teacher_id:Number($('rt_teacher').value),day:$('rt_day').value,time_text:$('rt_time').value.trim(),subject:$('rt_sub').value.trim()});
+  error? msg($('rt_msg'),'হয়নি: '+error.message,'err') : loadRoutines();
+}
+async function delRoutine(id){ const {error}=await sb.from('routines').delete().eq('id',id); if(!error) loadRoutines(); }
 async function addTeacher(){
   const name=$('nt_name').value.trim(); if(!name) return msg($('t_msg'),'নাম লিখুন।','err');
   const {error}=await sb.from('teachers').insert({name,post:$('nt_post').value.trim(),phone:$('nt_phone').value.trim(),salary:Number($('nt_salary').value||0)});
@@ -728,16 +832,23 @@ async function pageLedger(){
     <span class="stat">মোট আয়<br><b>৳${inc}</b></span><span class="stat">মোট ব্যয়<br><b>৳${exp}</b></span><span class="stat">হাতে আছে<br><b>৳${inc-exp}</b></span>
     <div class="row"><select id="nl_kind"><option value="income">আয়</option><option value="expense">ব্যয়</option></select>
     <input id="nl_head" placeholder="খাত (যেমন: দান, বই কেনা)"><input id="nl_amt" type="number" placeholder="৳">
+    <input id="nl_note" placeholder="নোট (ঐচ্ছিক)">
     <button class="act" onclick="addLedger()">যোগ করুন</button></div><div id="l_msg"></div></div>
-    <div class="box">${data&&data.length? `<table><tr><th>তারিখ</th><th>ধরন</th><th>খাত</th><th>পরিমাণ</th></tr>
-      ${data.map(r=>`<tr><td>${r.entry_date}</td><td>${r.kind==='income'?'আয়':'ব্যয়'}</td><td>${esc(r.head)}</td><td>৳${r.amount}</td></tr>`).join('')}</table>`
+    <div class="box">${data&&data.length? `<table><tr><th>তারিখ</th><th>ধরন</th><th>খাত</th><th>পরিমাণ</th><th>নোট</th><th></th></tr>
+      ${data.map(r=>`<tr><td>${r.entry_date}</td><td>${r.kind==='income'?'আয়':'ব্যয়'}</td><td>${esc(r.head)}</td><td>৳${bnN(r.amount)}</td><td>${esc(r.note||'')}</td>
+      <td><button class="red s" onclick="voidLedger(${r.id})">বাতিল</button></td></tr>`).join('')}</table>`
       : '<div class="msg">এখনো কোনো হিসাব নেই।</div>'}</div>`;
 }
 async function addLedger(){
   const head=$('nl_head').value.trim(), amount=Number($('nl_amt').value||0);
   if(!head||!amount) return msg($('l_msg'),'খাত ও পরিমাণ লিখুন।','err');
-  const {error}=await sb.from('ledger').insert({kind:$('nl_kind').value,head,amount});
+  const {error}=await sb.from('ledger').insert({kind:$('nl_kind').value,head,amount,note:$('nl_note')?$('nl_note').value.trim():''});
   error? msg($('l_msg'),'হয়নি: '+error.message,'err') : pageLedger();
+}
+async function voidLedger(id){
+  if(!confirm('এই হিসাবের এন্ট্রি বাতিল করবেন? (মুছে যাবে না, হিসাব থেকে বাদ যাবে)')) return;
+  const {error}=await sb.from('ledger').update({voided:true}).eq('id',id);
+  if(!error) pageLedger();
 }
 
 /* ---------- পরীক্ষা ও নম্বর ---------- */
@@ -755,7 +866,47 @@ async function pageExams(){
     ${exams&&exams.length? `<table><tr><th>পরীক্ষা</th><th>জামাত</th><th>কাজ</th></tr>
       ${exams.map(e=>`<tr><td>${esc(e.name)}</td><td>${esc(e.classes?e.classes.name:'')}</td>
       <td><button class="act s" onclick="pageMarks(${e.id})">নম্বর বসান ও রেজাল্ট</button></td></tr>`).join('')}</table>`
-      : '<div class="msg">এখনো কোনো পরীক্ষা তৈরি হয়নি।</div>'}</div>`;
+      : '<div class="msg">এখনো কোনো পরীক্ষা তৈরি হয়নি।</div>'}</div>
+    <div class="box"><h2>পরীক্ষার রুটিন</h2>
+    <div class="row"><select id="xr_exam"><option value="">পরীক্ষা বাছুন</option>${(exams||[]).map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select>
+    <input id="xr_date" type="date"><input id="xr_sub" placeholder="বিষয়"><input id="xr_time" placeholder="সময় (যেমন: সকাল ১০টা)">
+    <button class="act" onclick="addExRoutine()">রুটিন যোগ করুন</button></div><div id="xr_msg"></div><div id="xr_list">লোড হচ্ছে…</div></div>`;
+  loadExRoutines();
+}
+async function loadExRoutines(){
+  const el=$('xr_list'); if(!el) return;
+  const {data}=await sb.from('exam_routines').select('*,exams(name),subjects(name)').order('exam_date');
+  window._xrSubs={};
+  el.innerHTML= data&&data.length? `<table><tr><th>পরীক্ষা</th><th>তারিখ</th><th>বিষয়</th><th>সময়</th><th></th></tr>
+    ${data.map(r=>`<tr><td>${esc(r.exams?r.exams.name:'')}</td><td>${r.exam_date}</td><td>${esc(r.subjects?r.subjects.name:'')}</td><td>${esc(r.time_text||'')}</td>
+    <td><button class="red s" onclick="delExRoutine(${r.id})">মুছুন</button></td></tr>`).join('')}</table>
+    <div class="row"><button class="act gold" onclick="printExRoutines()">রুটিন প্রিন্ট করুন</button></div>`
+    : '<div class="msg">এখনো কোনো রুটিন নেই।</div>';
+  window._xrData=data||[];
+}
+async function addExRoutine(){
+  if(!$('xr_exam').value||!$('xr_date').value) return msg($('xr_msg'),'পরীক্ষা ও তারিখ বাছুন।','err');
+  const examId=Number($('xr_exam').value), subName=$('xr_sub').value.trim();
+  let subjectId=null;
+  if(subName){
+    const {data:ex}=await sb.from('exams').select('class_id').eq('id',examId).single();
+    if(ex){ const {data:subs}=await sb.from('subjects').select('id,name').eq('class_id',ex.class_id);
+      const f=(subs||[]).find(s=>s.name===subName); if(f) subjectId=f.id; }
+  }
+  window._xrSubNames=window._xrSubNames||{}; if(subName) window._xrSubNames[examId+'_'+$('xr_date').value]=subName;
+  const {error}=await sb.from('exam_routines').insert({exam_id:examId,exam_date:$('xr_date').value,time_text:$('xr_time').value.trim(),subject_id:subjectId});
+  error? msg($('xr_msg'),'হয়নি: '+error.message,'err') : loadExRoutines();
+}
+async function delExRoutine(id){ const {error}=await sb.from('exam_routines').delete().eq('id',id); if(!error) loadExRoutines(); }
+function printExRoutines(){
+  const data=window._xrData||[]; const inst=($('tbName').textContent||'মাদ্রাসা');
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>পরীক্ষার রুটিন</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}</style></head><body>
+  <h2>${esc(inst)}</h2><h3>পরীক্ষার রুটিন</h3>
+  <table><tr><th>পরীক্ষা</th><th>তারিখ</th><th>বিষয়</th><th>সময়</th></tr>
+  ${data.map(r=>`<tr><td>${esc(r.exams?r.exams.name:'')}</td><td>${r.exam_date}</td><td>${esc(r.subjects?r.subjects.name:'')}</td><td>${esc(r.time_text||'')}</td></tr>`).join('')}</table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
 }
 async function addExam(){
   const name=$('ne_name').value.trim(); if(!name) return msg($('e_msg'),'পরীক্ষার নাম লিখুন।','err');
@@ -773,13 +924,71 @@ async function pageMarks(examId){
   $('page').innerHTML=`<div class="box"><h2>${esc(exam.name)} — ${esc(exam.classes?exam.classes.name:'')}</h2>
     <div class="row"><input id="nsj_name" placeholder="বিষয়ের নাম (যেমন: কুরআন)"><input id="nsj_full" type="number" value="100" style="width:100px">
     <button class="act" onclick="addSubject('${exam.class_id}',${examId})">বিষয় যোগ করুন</button></div><div id="m_msg"></div>
-    ${subs&&subs.length&&sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th>${subs.map(s=>`<th>${esc(s.name)} (${s.full_marks})</th>`).join('')}<th>মোট</th></tr>
-      ${sts.map(st=>{let tot=0; const cells=subs.map(s=>{const v=mm[st.id+'_'+s.id]??''; if(v!=='') tot+=Number(v);
-        return `<td><input type="number" style="width:70px" value="${v}" onchange="saveMark(${examId},${st.id},${s.id},this.value)"></td>`}).join('');
-        return `<tr><td>${st.roll??''}</td><td>${esc(st.name)}</td>${cells}<td><b>${tot}</b></td></tr>`}).join('')}</table>
-      <p>নম্বর লিখলেই নিজে নিজে সেভ হয়ে যাবে। মোট নিজে নিজে হিসাব হয়। (মেধা তালিকা: মোটের বড় থেকে ছোট ক্রমে ছাত্ররা — ছাপানোর শিট পরের ধাপে আসছে।)</p>`
+    ${subs&&subs.length&&sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th>${subs.map(s=>`<th>${esc(s.name)} (${s.full_marks})</th>`).join('')}<th>মোট</th><th>গ্রেড</th><th>সনদ</th></tr>
+      ${sts.map(st=>{let tot=0,full=0; const cells=subs.map(s=>{const v=mm[st.id+'_'+s.id]??''; if(v!=='') tot+=Number(v); full+=Number(s.full_marks||0);
+        return `<td><input type="number" style="width:70px" value="${v}" onchange="saveMark(${examId},'${st.id}',${s.id},this.value)"></td>`}).join('');
+        return `<tr><td>${st.roll??''}</td><td>${esc(st.name)}</td>${cells}<td><b>${tot}</b></td><td>${gradeOf(tot,full)}</td>
+        <td><button class="act s" onclick="printCert(${examId},'${st.id}')">সনদ</button></td></tr>`}).join('')}</table>
+      <p>নম্বর লিখলেই নিজে নিজে সেভ হয়ে যাবে। মোট ও গ্রেড নিজে নিজে হিসাব হয়।</p>
+      <div class="row"><button class="act gold" onclick="printResultSheet(${examId})">রেজাল্ট শিট প্রিন্ট করুন</button>
+      <button class="act" onclick="printMerit(${examId})">মেধা তালিকা প্রিন্ট</button></div>`
       : '<div class="msg">আগে এই জামাতের বিষয় যোগ করুন, আর জামাতে ছাত্র থাকতে হবে।</div>'}
     <div class="row"><button class="act gold" onclick="pageExams()">← পরীক্ষার তালিকায় ফিরুন</button></div></div>`;
+}
+function gradeOf(obtained,full){
+  if(!full) return '';
+  const p=obtained/full*100;
+  return p>=80?'A+':p>=70?'A':p>=60?'A-':p>=50?'B':p>=40?'C':p>=33?'D':'F';
+}
+async function examResults(examId){
+  const {data:exam}=await sb.from('exams').select('*,classes(name)').eq('id',examId).single();
+  const [{data:subs},{data:sts},{data:marks}]=await Promise.all([
+    sb.from('subjects').select('*').eq('class_id',exam.class_id),
+    sb.from('students').select('*').eq('class_id',exam.class_id).eq('status','active').order('roll'),
+    sb.from('marks').select('*').eq('exam_id',examId)
+  ]);
+  const mm={}; (marks||[]).forEach(m=>mm[m.student_id+'_'+m.subject_id]=Number(m.marks));
+  const full=(subs||[]).reduce((a,s)=>a+Number(s.full_marks||0),0);
+  const rows=(sts||[]).map(st=>{ const tot=(subs||[]).reduce((a,s)=>a+(mm[st.id+'_'+s.id]||0),0);
+    return {st,tot,grade:gradeOf(tot,full),per:full?Math.round(tot/full*100):0}; });
+  rows.sort((a,b)=>b.tot-a.tot);
+  rows.forEach((r,i)=>r.pos=i+1);
+  return {exam,subs:subs||[],rows,full,mm};
+}
+async function printResultSheet(examId){
+  const {exam,subs,rows,full,mm}=await examResults(examId);
+  const inst=($('tbName').textContent||'মাদ্রাসা');
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>রেজাল্ট শিট</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b;margin:3px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:5px;font-size:13px;text-align:center}</style></head><body>
+  <h2>${esc(inst)}</h2><h3>${esc(exam.name)} — রেজাল্ট শিট (${esc(exam.classes?exam.classes.name:'')})</h3>
+  <table><tr><th>মেধা</th><th>রোল</th><th>নাম</th>${subs.map(s=>`<th>${esc(s.name)}</th>`).join('')}<th>মোট (${full})</th><th>%</th><th>গ্রেড</th></tr>
+  ${rows.map(r=>`<tr><td>${r.pos}</td><td>${r.st.roll??''}</td><td style="text-align:left">${esc(r.st.name)}</td>${subs.map(s=>`<td>${mm[r.st.id+'_'+s.id]??''}</td>`).join('')}<td><b>${r.tot}</b></td><td>${r.per}%</td><td>${r.grade}</td></tr>`).join('')}</table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+async function printMerit(examId){
+  const {exam,rows}=await examResults(examId);
+  const inst=($('tbName').textContent||'মাদ্রাসা');
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>মেধা তালিকা</title><style>body{font-family:sans-serif;padding:16px}h2,h3{text-align:center;color:#0b5d3b;margin:3px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:6px}</style></head><body>
+  <h2>${esc(inst)}</h2><h3>${esc(exam.name)} — মেধা তালিকা (${esc(exam.classes?exam.classes.name:'')})</h3>
+  <table><tr><th>মেধা স্থান</th><th>রোল</th><th>নাম</th><th>মোট নম্বর</th><th>গ্রেড</th></tr>
+  ${rows.map(r=>`<tr><td>${r.pos}</td><td>${r.st.roll??''}</td><td>${esc(r.st.name)}</td><td>${r.tot}</td><td>${r.grade}</td></tr>`).join('')}</table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+async function printCert(examId,studentId){
+  const {exam,rows}=await examResults(examId);
+  const r=rows.find(x=>x.st.id===studentId); if(!r) return;
+  const inst=($('tbName').textContent||'মাদ্রাসা');
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>সনদপত্র</title><style>body{font-family:serif;padding:30px}.cert{border:6px double #0b5d3b;padding:36px;text-align:center;max-width:720px;margin:auto}h1{color:#0b5d3b}p{font-size:17px;line-height:1.9}</style></head><body>
+  <div class="cert"><h1>${esc(inst)}</h1><h2>সনদপত্র</h2>
+  <p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, <b>${esc(r.st.name)}</b>, জামাত: ${esc(exam.classes?exam.classes.name:'')}, রোল: ${r.st.roll??''} — অত্র মাদ্রাসার একজন নিয়মিত ছাত্র। সে <b>${esc(exam.name)}</b> পরীক্ষায় অংশগ্রহণ করে মোট <b>${r.tot}</b> নম্বর পেয়ে <b>${r.grade}</b> গ্রেডে উত্তীর্ণ হয়েছে এবং মেধা তালিকায় <b>${r.pos}</b>তম স্থান অর্জন করেছে।</p>
+  <p>আমি তার উজ্জ্বল ভবিষ্যৎ কামনা করি।</p>
+  <p style="text-align:right;margin-top:40px">______________<br>প্রধান শিক্ষক / মুহতামিম</p></div>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
 }
 async function addSubject(classId,examId){
   const name=$('nsj_name').value.trim(); if(!name) return msg($('m_msg'),'বিষয়ের নাম লিখুন।','err');
@@ -812,6 +1021,32 @@ async function addHomework(){
   const {error}=await sb.from('homework').insert({class_id:$('nh_class').value,subject:$('nh_sub').value.trim(),details});
   error? msg($('h_msg'),'হয়নি: '+error.message,'err') : pageHomework();
 }
+
+/* ---------- বই / লাইব্রেরি ---------- */
+async function pageBooks(){
+  const [{data:cls},{data:books}]=await Promise.all([
+    sb.from('classes').select('*').order('sort_order'),
+    sb.from('books').select('*,classes(name)').order('title')
+  ]);
+  const opts=(cls||[]).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('page').innerHTML=`<div class="box"><h2>বই যোগ করুন</h2>
+    <div class="row"><input id="nb_title" placeholder="বইয়ের নাম" style="flex:1"><input id="nb_author" placeholder="লেখক/প্রকাশনী"></div>
+    <div class="row"><select id="nb_class"><option value="">জামাত (সবার জন্য হলে খালি)</option>${opts}</select>
+    <input id="nb_qty" type="number" placeholder="কপি সংখ্যা" style="width:120px">
+    <button class="act" onclick="addBook()">যোগ করুন</button></div><div id="bk2_msg"></div></div>
+    <div class="box"><h2>বইয়ের তালিকা (${books?books.length:0})</h2>
+    ${books&&books.length? `<table><tr><th>বই</th><th>লেখক</th><th>জামাত</th><th>কপি</th><th></th></tr>
+      ${books.map(b=>`<tr><td>${esc(b.title)}</td><td>${esc(b.author||'')}</td><td>${esc(b.classes?b.classes.name:'সবার')}</td><td>${bnN(b.qty)}</td>
+      <td><button class="red s" onclick="delBook(${b.id})">মুছুন</button></td></tr>`).join('')}</table>`
+      : '<div class="msg">এখনো কোনো বই যোগ হয়নি।</div>'}</div>`;
+}
+async function addBook(){
+  const title=$('nb_title').value.trim(); if(!title) return msg($('bk2_msg'),'বইয়ের নাম লিখুন।','err');
+  const {error}=await sb.from('books').insert({title,author:$('nb_author').value.trim(),class_id:$('nb_class').value||null,qty:Number($('nb_qty').value||0)});
+  error? msg($('bk2_msg'),'হয়নি: '+error.message,'err') : pageBooks();
+}
+async function delBook(id){ if(!confirm('বইটি মুছে ফেলবেন?')) return;
+  const {error}=await sb.from('books').delete().eq('id',id); if(!error) pageBooks(); }
 
 /* ---------- অনলাইন পেমেন্ট (যাচাই) ---------- */
 async function pageOpay(){
