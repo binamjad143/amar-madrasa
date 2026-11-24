@@ -276,6 +276,9 @@ async function addBulk(){
 }
 
 /* ---------- হাজিরা ---------- */
+/* হাজিরা: সবাই ডিফল্ট উপস্থিত — শুধু যে আসেনি তার নামে অনুপস্থিত চাপতে হয়।
+   কিছুই সেভ হয় না, শেষে "হাজিরা সংরক্ষণ করুন" বাটনে একবারে সবার হাজিরা সেভ হয়। */
+const ATT_LABEL={present:'উপস্থিত',absent:'অনুপস্থিত',late:'দেরি',leave:'ছুটি'};
 async function pageAttendance(){
   const p=$('page'); const today=new Date().toISOString().slice(0,10);
   const [{data:cls},{data:sts},{data:att}]=await Promise.all([
@@ -283,21 +286,55 @@ async function pageAttendance(){
     sb.from('students').select('*').eq('status','active').order('roll'),
     sb.from('attendance').select('*').eq('att_date',today)
   ]);
-  const attMap={}; (att||[]).forEach(a=>attMap[a.student_id]=a.status);
+  const saved={}; (att||[]).forEach(a=>saved[a.student_id]=a.status);
+  window._attList=(sts||[]).filter(s=>!window._atCls||s.class_id==window._atCls);
+  window._attState={};
+  window._attList.forEach(s=>window._attState[s.id]=saved[s.id]||'present');
+  window._attSavedCount=(att||[]).length;
   const opts=(cls||[]).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
-  p.innerHTML=`<div class="box"><h2>আজকের হাজিরা (${today})</h2>
-    <div class="row"><select id="at_class" onchange="pageAttendance()"><option value="">সব জামাত</option>${opts}</select></div>
-    ${sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th><th>অবস্থা</th></tr>
-      ${sts.filter(s=>!$('at_class')||!window._atCls||s.class_id==window._atCls).map(s=>`<tr><td>${s.roll??''}</td><td>${esc(s.name)}</td>
-      <td>${['present','absent','late','leave'].map(v=>`<button class="s ${attMap[s.id]===v?'act':'act gold'}" onclick="markAtt('${s.id}','${v}')">${{present:'উপস্থিত',absent:'অনুপস্থিত',late:'দেরি',leave:'ছুটি'}[v]}</button>`).join(' ')}</td></tr>`).join('')}</table>`
-      : '<div class="msg">ছাত্র নেই — আগে ছাত্র যোগ করুন।</div>'}
+  p.innerHTML=`<style>
+    .attb{border:2px solid #b9cfc0;background:#fff;color:#444;border-radius:999px;padding:7px 14px;font:inherit;font-size:15px;cursor:pointer}
+    .attb.on-p{background:#0b5d3b;border-color:#0b5d3b;color:#fff;font-weight:700}
+    .attb.on-a{background:#b3261e;border-color:#b3261e;color:#fff;font-weight:700}
+    .attb.on-l{background:#e08a00;border-color:#e08a00;color:#fff;font-weight:700}
+    .attb.on-v{background:#5b6abf;border-color:#5b6abf;color:#fff;font-weight:700}
+    tr.absent td{background:#fdecea !important}
+    .attcount{font-size:15px;background:#eef6f1;border:1px solid #dcebe1;border-radius:10px;padding:9px 12px}
+  </style>
+  <div class="box"><h2>আজকের হাজিরা (${today})</h2>
+    <p style="margin:4px 0 10px">সবাই <b>উপস্থিত</b> ধরা আছে — শুধু যে আসেনি, তার নামের পাশে <b>অনুপস্থিত</b> চাপ দিন। শেষে নিচের <b>হাজিরা সংরক্ষণ করুন</b> বাটনে চাপ দিলেই সেভ হবে।</p>
+    <div class="row"><select id="at_class"><option value="">সব জামাত</option>${opts}</select>
+    <button class="act s" onclick="allPresent()">সবাইকে উপস্থিত করুন</button></div>
+    <div id="att_body"></div>
     <div id="a_msg"></div></div>`;
-  const sel=$('at_class'); if(sel){ sel.value=window._atCls||''; sel.onchange=()=>{window._atCls=sel.value||null; pageAttendance();}; }
+  const sel=$('at_class'); sel.value=window._atCls||''; sel.onchange=()=>{window._atCls=sel.value||null; pageAttendance();};
+  renderAtt();
+  if(window._attSavedCount) msg($('a_msg'),`আজকের হাজিরা আগেই সংরক্ষণ করা আছে (${window._attSavedCount} জনের) — বদলালে আবার সংরক্ষণ করুন।`,'ok');
 }
-async function markAtt(studentId,status){
+function renderAtt(){
+  const box=$('att_body'); if(!box) return;
+  const list=window._attList||[], st=window._attState||{};
+  if(!list.length){ box.innerHTML='<div class="msg">এই জামাতে ছাত্র নেই — আগে ছাত্র যোগ করুন।</div>'; return; }
+  const cnt={present:0,absent:0,late:0,leave:0}; list.forEach(s=>cnt[st[s.id]||'present']++);
+  box.innerHTML=`<div class="row"><span class="attcount">মোট <b>${list.length}</b> &nbsp;|&nbsp; উপস্থিত <b style="color:#0b5d3b">${cnt.present}</b> &nbsp;|&nbsp; অনুপস্থিত <b style="color:#b3261e">${cnt.absent}</b>${cnt.late?` &nbsp;|&nbsp; দেরি <b>${cnt.late}</b>`:''}${cnt.leave?` &nbsp;|&nbsp; ছুটি <b>${cnt.leave}</b>`:''}</span></div>
+  <table><tr><th>রোল</th><th>নাম</th><th>হাজিরা</th></tr>
+  ${list.map(s=>{ const v=st[s.id]||'present'; return `<tr class="${v==='absent'?'absent':''}"><td>${s.roll??''}</td><td>${esc(s.name)}</td>
+    <td><button class="attb ${v==='present'?'on-p':''}" onclick="setAtt('${s.id}','present')">উপস্থিত</button>
+    <button class="attb ${v==='absent'?'on-a':''}" onclick="setAtt('${s.id}','absent')">অনুপস্থিত</button>
+    <button class="attb ${v==='late'?'on-l':''}" onclick="setAtt('${s.id}','late')">দেরি</button>
+    <button class="attb ${v==='leave'?'on-v':''}" onclick="setAtt('${s.id}','leave')">ছুটি</button></td></tr>`; }).join('')}</table>
+  <div class="row"><button class="act gold" style="font-size:17px;padding:13px 22px" onclick="saveAttendance()">হাজিরা সংরক্ষণ করুন</button></div>`;
+}
+function setAtt(id,status){ window._attState[id]=status; renderAtt(); }
+function allPresent(){ (window._attList||[]).forEach(s=>window._attState[s.id]='present'); renderAtt(); }
+async function saveAttendance(){
+  const list=window._attList||[]; if(!list.length) return;
   const today=new Date().toISOString().slice(0,10);
-  const {error}=await sb.from('attendance').upsert({student_id:studentId,att_date:today,status,marked_by:me.id},{onConflict:'student_id,att_date'});
-  error? msg($('a_msg'),'হয়নি: '+error.message,'err') : pageAttendance();
+  const rows=list.map(s=>({student_id:s.id,att_date:today,status:window._attState[s.id]||'present',marked_by:me.id}));
+  const {error}=await sb.from('attendance').upsert(rows,{onConflict:'student_id,att_date'});
+  if(error) return msg($('a_msg'),'সংরক্ষণ হয়নি: '+error.message,'err');
+  const cnt={present:0,absent:0,late:0,leave:0}; rows.forEach(r=>cnt[r.status]++);
+  msg($('a_msg'),`হাজিরা সংরক্ষণ হয়েছে — মোট ${rows.length} জন: উপস্থিত ${cnt.present}, অনুপস্থিত ${cnt.absent}${cnt.late?`, দেরি ${cnt.late}`:''}${cnt.leave?`, ছুটি ${cnt.leave}`:''}।`,'ok');
 }
 
 /* ---------- বেতন ---------- */
