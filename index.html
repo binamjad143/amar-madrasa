@@ -5,26 +5,60 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>আমার মাদ্রাসা — অনলাইন</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
-  *{box-sizing:border-box} body{margin:0;font-family:"Noto Sans Bengali",Arial,sans-serif;background:#f4f6f4;color:#1b2b21}
-  header{background:linear-gradient(135deg,#065f46,#0b5d3b);color:#fff;text-align:center;padding:12px 8px}
-  header h1{margin:2px 0;font-size:24px} header p{margin:0;opacity:.9;font-size:14px}
-  nav{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;background:#084a2f;padding:6px}
-  nav button{background:transparent;color:#fff;border:0;padding:8px 12px;border-radius:6px;font:inherit;cursor:pointer}
-  nav button.on,nav button:hover{background:#c9a227;color:#000}
-  main{max-width:1000px;margin:14px auto;padding:0 10px}
-  .box{background:#fff;border-radius:10px;padding:14px;margin-bottom:14px;box-shadow:0 1px 4px #0002}
-  h2{margin:0 0 10px;color:#0b5d3b;font-size:20px}
-  input,select,textarea{padding:8px;border:1px solid #9ab;border-radius:6px;font:inherit}
-  button.act{background:#0b5d3b;color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit}
-  button.gold{background:#c9a227;color:#000} button.red{background:#b3261e;color:#fff}
-  button.s{padding:4px 8px;font-size:13px}
-  table{border-collapse:collapse;width:100%;font-size:14px} th,td{border:1px solid #cbd;padding:6px;text-align:left} th{background:#e3efe7}
-  .row{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0;align-items:center}
-  .msg{padding:10px;border-radius:8px;background:#fff8e1;border:1px solid #e6c65c;margin:8px 0}
+  *{box-sizing:border-box}
+  :root{--green:#0b5d3b;--green2:#065f46;--deep:#073d27;--gold:#c9a227;--gold2:#e3bc3f;--ink:#1b2b21;--bg:#eef4ef}
+  body{margin:0;font-family:"Noto Sans Bengali",Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.55}
+  /* হেডার */
+  header{background:linear-gradient(135deg,#052e1d 0%,var(--green2) 55%,#0e7a4c 100%);color:#fff;text-align:center;padding:22px 10px 18px;position:relative;overflow:hidden;box-shadow:0 2px 10px #0003}
+  header::before,header::after{content:"";position:absolute;border:2px solid #ffffff14;border-radius:50%}
+  header::before{width:190px;height:190px;top:-95px;left:-55px}
+  header::after{width:240px;height:240px;bottom:-160px;right:-70px}
+  header h1{margin:0;font-size:27px;font-weight:800;letter-spacing:.3px;text-shadow:0 2px 6px #0005;position:relative}
+  header p{margin:4px 0 0;opacity:.92;font-size:14px;position:relative}
+  header p::before{content:"";display:block;width:64px;height:3px;background:var(--gold);border-radius:2px;margin:0 auto 8px}
+  /* মেনু */
+  nav{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;background:#073d27f2;padding:8px 6px;box-shadow:0 2px 8px #0003;backdrop-filter:blur(4px)}
+  nav button{background:#ffffff14;color:#fff;border:1px solid #ffffff22;padding:7px 13px;border-radius:999px;font:inherit;font-size:15px;cursor:pointer;transition:.15s}
+  nav button:hover{background:#ffffff2b}
+  nav button.on{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#221a00;font-weight:700;border-color:transparent;box-shadow:0 2px 6px #0004}
+  /* পেজ ও কার্ড */
+  main{max-width:1000px;margin:18px auto 30px;padding:0 12px}
+  .box{background:#fff;border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 4px 16px #0b5d3b14;border:1px solid #dcebe1}
+  h2{margin:0 0 12px;color:var(--green);font-size:21px;font-weight:800;padding-bottom:8px;border-bottom:2px solid #e7f0ea}
+  h2:first-child{margin-top:0}
+  /* ফরম */
+  input,select,textarea{padding:10px 12px;border:1.5px solid #b9cfc0;border-radius:10px;font:inherit;background:#fbfdfb;transition:.15s;max-width:100%}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px #0b5d3b26;background:#fff}
+  textarea{line-height:1.7}
+  label{font-size:15px}
+  /* বাটন */
+  button.act{background:linear-gradient(180deg,#0e7a4c,var(--green));color:#fff;border:0;padding:10px 18px;border-radius:10px;cursor:pointer;font:inherit;font-weight:700;box-shadow:0 3px 8px #0b5d3b3d;transition:.15s}
+  button.act:hover{filter:brightness(1.08)} button.act:active{transform:scale(.97)}
+  button.gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#221a00;box-shadow:0 3px 8px #c9a2274d}
+  button.red{background:linear-gradient(180deg,#d33a31,#b3261e);color:#fff}
+  button.s{padding:5px 10px;font-size:13px;border-radius:8px}
+  /* টেবিল */
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:14.5px;border:1px solid #dcebe1;border-radius:12px;overflow:hidden;margin:8px 0}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid #e4efe7}
+  th{background:linear-gradient(180deg,#eaf4ee,#dcebe1);color:var(--deep);font-weight:700}
+  tr:last-child td{border-bottom:0}
+  tbody tr:nth-child(even) td,table tr:nth-child(even) td{background:#f7faf8}
+  /* সারি, বার্তা, স্ট্যাট */
+  .row{display:flex;flex-wrap:wrap;gap:9px;margin:8px 0;align-items:center}
+  .msg{padding:11px 13px;border-radius:10px;background:#fff8e1;border:1px solid #e6c65c;margin:9px 0;font-size:15px}
   .err{background:#fdecea;border-color:#e57373} .ok{background:#e8f5e9;border-color:#81c784}
-  .hidden{display:none} .stat{display:inline-block;background:#e3efe7;border-radius:8px;padding:10px 14px;margin:4px}
-  .stat b{font-size:20px;color:#0b5d3b}
+  .hidden{display:none}
+  .stat{display:inline-block;background:linear-gradient(160deg,#fff,#eef6f1);border:1px solid #dcebe1;border-radius:14px;padding:14px 18px;margin:5px;box-shadow:0 3px 10px #0b5d3b12;min-width:128px;text-align:center}
+  .stat b{display:block;font-size:26px;color:var(--green);font-weight:800}
+  /* লগইন পেজ */
+  #loginView .box{box-shadow:0 10px 30px #0b5d3b26;border-top:5px solid var(--gold)}
+  @media (max-width:560px){
+    header h1{font-size:22px} main{padding:0 8px} .box{padding:14px;border-radius:13px}
+    nav button{padding:6px 10px;font-size:14px} .stat{min-width:44%;padding:11px}
+    table{font-size:13.5px} th,td{padding:7px}
+  }
 </style>
 </head>
 <body>
