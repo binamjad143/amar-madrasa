@@ -54,6 +54,48 @@
   .stat b{display:block;font-size:26px;color:var(--green);font-weight:800}
   /* লগইন পেজ */
   #loginView .box{box-shadow:0 10px 30px #0b5d3b26;border-top:5px solid var(--gold)}
+  /* ===== Ilmify-ধাঁচের কাঠামো: টপবার, ড্রয়ার, নিচের মেনু, হিরো কার্ড ===== */
+  body{padding-bottom:74px}
+  .topbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:10px;background:linear-gradient(90deg,#052e1d,#0b5d3b);color:#fff;padding:9px 12px;box-shadow:0 2px 10px #0004}
+  .topbar .burger{background:#ffffff1c;border:0;color:#fff;width:42px;height:42px;border-radius:50%;font-size:20px;cursor:pointer;flex:none}
+  .topbar .tt{flex:1;min-width:0}
+  .topbar .tt b{display:block;font-size:16.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .topbar .tt span{font-size:13px;opacity:.85}
+  .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(180deg,var(--gold2),var(--gold));color:#221a00;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;flex:none;border:2px solid #ffffff55}
+  .drawerWrap{position:fixed;inset:0;z-index:90;display:none}
+  .drawerWrap.open{display:block}
+  .drawerWrap .scrim{position:absolute;inset:0;background:#0008}
+  .drawer{position:absolute;top:0;left:0;bottom:0;width:290px;max-width:84vw;background:linear-gradient(180deg,#063d28,#052e1d);color:#fff;overflow-y:auto;box-shadow:4px 0 18px #0006;padding:16px 0 20px}
+  .drawer .dhead{display:flex;gap:11px;align-items:center;padding:2px 16px 14px;border-bottom:1px solid #ffffff22}
+  .drawer .dhead .avatar{width:50px;height:50px;font-size:23px}
+  .drawer .dhead b{font-size:17px;display:block;line-height:1.3}
+  .drawer .dhead span{font-size:12.5px;opacity:.8}
+  .drawer .dclose{margin-left:auto;background:#ffffff1c;border:0;color:#fff;width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer;flex:none}
+  .drawer .dsec{padding:13px 16px 4px;font-size:12.5px;letter-spacing:.6px;opacity:.65;text-transform:uppercase}
+  .drawer button.ditem{display:flex;align-items:center;gap:11px;width:100%;background:transparent;border:0;color:#fff;font:inherit;font-size:16.5px;text-align:left;padding:11px 16px;cursor:pointer;border-left:4px solid transparent}
+  .drawer button.ditem:hover{background:#ffffff12}
+  .drawer button.ditem.on{background:#ffffff1f;border-left-color:var(--gold);font-weight:700}
+  .bottombar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#0a1633;display:flex;box-shadow:0 -2px 12px #0005}
+  .bottombar button{flex:1;background:transparent;border:0;color:#aebadd;font:inherit;font-size:12.5px;padding:7px 2px 9px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+  .bottombar button svg{width:23px;height:23px}
+  .bottombar button.on{color:var(--gold2);font-weight:700;background:#ffffff10;border-radius:10px}
+  /* হিরো কার্ড */
+  .hero{background:linear-gradient(160deg,#0a1e4a,#0a1633 70%);border-radius:20px;color:#fff;padding:24px 16px 16px;text-align:center;box-shadow:0 8px 24px #0a163355;margin-bottom:18px}
+  .hero .logo{width:88px;height:88px;margin:0 auto 10px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#128a57,#0b5d3b);border:4px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:800;color:#ffe9a8;box-shadow:0 0 0 5px #c9a22733}
+  .hero h2{color:#fff;border:0;margin:0;font-size:24px;padding:0}
+  .hero .loc{color:#ffd968;font-size:14px;margin-top:2px}
+  .hero .datepill{display:inline-block;background:#fdf3d3;color:#6b5410;border-radius:999px;padding:7px 16px;font-weight:700;font-size:14.5px;margin:13px 0 15px}
+  .hero .minis{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .hero .mini{background:#ffffff12;border:1px solid #ffffff2b;border-radius:14px;padding:11px 6px 9px}
+  .hero .mini .lb{font-size:13px;opacity:.9}
+  .hero .mini .vl{font-size:19px;font-weight:800;color:#ffd968;margin:2px 0 7px}
+  .hero .mini .sub{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#221a00;border-radius:8px;font-size:12px;font-weight:700;padding:5px 4px;line-height:1.35}
+  .secpill{display:inline-block;background:#fdf3d3;color:#8a6d1a;font-weight:700;font-size:14px;border-radius:999px;padding:5px 14px;margin:4px 0 8px}
+  .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .statcard{background:#fff;border:1px solid #e2ebe4;border-radius:14px;padding:15px 16px;box-shadow:0 3px 10px #0b5d3b0d}
+  .statcard .n{font-size:24px;font-weight:800;color:#0a1e4a}
+  .statcard .l{font-size:14px;color:#6b7a70;margin-top:1px}
+  @media (max-width:560px){ .hero .minis{grid-template-columns:1fr 1fr 1fr;gap:6px} .hero .mini .vl{font-size:16px} .hero .mini .lb{font-size:11.5px} .hero .mini .sub{font-size:10.5px} }
   @media (max-width:560px){
     header h1{font-size:22px} main{padding:0 8px} .box{padding:14px;border-radius:13px}
     nav button{padding:6px 10px;font-size:14px} .stat{min-width:44%;padding:11px}
@@ -83,13 +125,43 @@
 
 <!-- মূল অ্যাপ -->
 <div id="appView" class="hidden">
-  <nav id="tabs">
-    <button data-t="home" class="on">হোম</button>
-    <button data-t="attendance">হাজিরা</button>
-    <button data-t="fees">বেতন</button>
-    <button data-t="settings">সেটিংস</button>
-  </nav>
+  <div class="topbar">
+    <button class="burger" onclick="toggleDrawer(true)" aria-label="মেনু">☰</button>
+    <div class="tt"><b id="tbName">দারুল আরকাম মডেল মাদ্রাসা</b><span id="tbPage">ড্যাশবোর্ড</span></div>
+    <div class="avatar" id="tbAvatar">দ</div>
+  </div>
+  <div class="drawerWrap" id="drawerWrap">
+    <div class="scrim" onclick="toggleDrawer(false)"></div>
+    <div class="drawer">
+      <div class="dhead"><div class="avatar" id="drAvatar">দ</div>
+        <div><b id="drName">দারুল আরকাম মডেল মাদ্রাসা</b><span>অনলাইন প্যানেল</span></div>
+        <button class="dclose" onclick="toggleDrawer(false)">✕</button></div>
+      <div class="dsec">প্রধান</div>
+      <button class="ditem" data-t="home">ড্যাশবোর্ড</button>
+      <div class="dsec">মডিউল</div>
+      <button class="ditem" data-t="classes">জামাত</button>
+      <button class="ditem" data-t="students">ছাত্র</button>
+      <button class="ditem" data-t="attendance">হাজিরা</button>
+      <button class="ditem" data-t="fees">বেতন ও বকেয়া</button>
+      <button class="ditem" data-t="teachers">শিক্ষক ও কর্মচারী</button>
+      <button class="ditem" data-t="ledger">হিসাব ও অর্থ</button>
+      <button class="ditem" data-t="exams">পরীক্ষা ও ফলাফল</button>
+      <button class="ditem" data-t="homework">হোমওয়ার্ক</button>
+      <button class="ditem" data-t="opay">অনলাইন পেমেন্ট</button>
+      <button class="ditem" data-t="notices">নোটিশ</button>
+      <div class="dsec">অন্যান্য</div>
+      <button class="ditem" data-t="settings">সেটিংস ও ব্যাকআপ</button>
+      <button class="ditem" onclick="doLogout()">লগআউট</button>
+    </div>
+  </div>
   <main id="page"></main>
+  <div class="bottombar">
+    <button data-t="home" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8v9a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/></svg>ড্যাশবোর্ড</button>
+    <button data-t="students"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 9L12 4 2 9l10 5 10-5z"/><path d="M6 11.5V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-4.5"/></svg>শিক্ষার্থী</button>
+    <button data-t="attendance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>হাজিরা</button>
+    <button data-t="fees"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/></svg>বেতন</button>
+    <button data-t="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.5a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.7h4l.4-2.5a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.06-.4.1-.8.1-1.2z"/></svg>সেটিংস</button>
+  </div>
 </div>
 
 <script src="config.js"></script>
@@ -131,54 +203,81 @@ async function doLogout(){ await sb.auth.signOut(); location.reload(); }
 async function enterApp(user){
   me=user; $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden');
   const {data}=await sb.from('institution').select('*').eq('id',1).single();
-  if(data&&data.name_bn) $('instName').textContent=data.name_bn;
-  document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.onclick=()=>go(b.dataset.t));
+  if(data&&data.name_bn){ $('instName').textContent=data.name_bn; $('tbName').textContent=data.name_bn; $('drName').textContent=data.name_bn;
+    const ch=data.name_bn.trim().charAt(0); $('tbAvatar').textContent=ch; $('drAvatar').textContent=ch; }
+  document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>go(b.dataset.t));
   go('home');
   keepAlive();
 }
 async function keepAlive(){ try{ await sb.from('keep_alive').update({last_ping:new Date().toISOString()}).eq('id',1); }catch(e){} }
 
+const PAGE_TITLES={home:'ড্যাশবোর্ড',classes:'জামাত',students:'শিক্ষার্থী',attendance:'হাজিরা',fees:'বেতন ও বকেয়া',teachers:'শিক্ষক ও কর্মচারী',ledger:'হিসাব ও অর্থ',exams:'পরীক্ষা ও ফলাফল',homework:'হোমওয়ার্ক',opay:'অনলাইন পেমেন্ট',notices:'নোটিশ',settings:'সেটিংস ও ব্যাকআপ'};
+function toggleDrawer(open){ $('drawerWrap').classList.toggle('open',!!open); }
 function go(t){
-  document.querySelectorAll('#tabs button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  toggleDrawer(false);
+  document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  $('tbPage').textContent=PAGE_TITLES[t]||'ড্যাশবোর্ড';
+  window.scrollTo(0,0);
   ({home:pageHome,classes:pageClasses,students:pageStudents,attendance:pageAttendance,fees:pageFees,teachers:pageTeachers,ledger:pageLedger,exams:pageExams,homework:pageHomework,opay:pageOpay,notices:pageNotices,settings:pageSettings,backup:pageSettings}[t]||pageHome)();
 }
 
 /* ---------- হোম ---------- */
+const bnN=n=>Number(n||0).toLocaleString('en-IN').replace(/\d/g,d=>'০১২৩৪৫৬৭৮৯'[d]);
 async function pageHome(){
   const p=$('page'); p.innerHTML='<div class="box">লোড হচ্ছে…</div>';
-  const today=new Date().toISOString().slice(0,10), month=today.slice(0,7);
-  const [st,cl,att,pay]=await Promise.all([
+  const now=new Date(), today=now.toISOString().slice(0,10), month=today.slice(0,7);
+  const [st,tc,attP,attAll,payM,payAll,billM,billAll,led]=await Promise.all([
     sb.from('students').select('id',{count:'exact',head:true}).eq('status','active'),
-    sb.from('classes').select('id',{count:'exact',head:true}),
+    sb.from('teachers').select('id',{count:'exact',head:true}).eq('status','active'),
     sb.from('attendance').select('id',{count:'exact',head:true}).eq('att_date',today).eq('status','present'),
-    sb.from('payments').select('amount').gte('pay_date',month+'-01')
+    sb.from('attendance').select('id',{count:'exact',head:true}).eq('att_date',today),
+    sb.from('payments').select('amount').gte('pay_date',month+'-01'),
+    sb.from('payments').select('amount'),
+    sb.from('bills').select('total').eq('month',month),
+    sb.from('bills').select('total,paid,student_id'),
+    sb.from('ledger').select('type,amount')
   ]);
-  const total=(pay.data||[]).reduce((a,r)=>a+Number(r.amount||0),0);
-  p.innerHTML=`<div class="box"><h2>সারসংক্ষেপ</h2>
-    <span class="stat">মোট ছাত্র<br><b>${st.count??0}</b></span>
-    <span class="stat">জামাত<br><b>${cl.count??0}</b></span>
-    <span class="stat">আজ উপস্থিত<br><b>${att.count??0}</b></span>
-    <span class="stat">এই মাসে আদায়<br><b>৳${total}</b></span></div>
-    <div class="box"><h2>শুরুটা এখান থেকে করুন</h2>
+  const sum=(rows,f)=> (rows||[]).reduce((a,r)=>a+Number(f(r)||0),0);
+  const students=st.count??0, teachers=tc.count??0;
+  const present=attP.count??0, marked=attAll.count??0;
+  const monthCollected=sum(payM.data,r=>r.amount), allCollected=sum(payAll.data,r=>r.amount);
+  const monthBilled=sum(billM.data,r=>r.total);
+  const rate=monthBilled>0? Math.round(monthCollected/monthBilled*100):0;
+  let dues=0; const dueStudents=new Set();
+  (billAll.data||[]).forEach(b=>{ const d=Number(b.total||0)-Number(b.paid||0); if(d>0){ dues+=d; dueStudents.add(b.student_id); } });
+  const income=sum((led.data||[]).filter(r=>r.type==='income'),r=>r.amount)+allCollected;
+  const expense=sum((led.data||[]).filter(r=>r.type==='expense'),r=>r.amount);
+  const instName=($('tbName').textContent||'মাদ্রাসা').trim();
+  let dateStr='', timeStr='';
+  try{ dateStr=new Intl.DateTimeFormat('bn-BD',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(now);
+       timeStr=new Intl.DateTimeFormat('bn-BD',{hour:'numeric',minute:'2-digit',hour12:true}).format(now); }catch(e){ dateStr=today; }
+  p.innerHTML=`
+  <div class="hero">
+    <div class="logo">${esc(instName.charAt(0))}</div>
+    <h2>${esc(instName)}</h2>
+    <div class="loc">অনলাইন প্যানেল</div>
+    <div><span class="datepill">🕐 ${esc(dateStr)} • ${esc(timeStr)}</span></div>
+    <div class="minis">
+      <div class="mini"><div class="lb">মোট উপস্থিতি</div><div class="vl">${bnN(present)}/${bnN(students)}</div><div class="sub">${marked? 'আজ হাজিরা নেওয়া হয়েছে':'আজ হাজিরা নেওয়া হয়নি'}</div></div>
+      <div class="mini"><div class="lb">এই মাসে সংগ্রহ</div><div class="vl">৳${bnN(monthCollected)}</div><div class="sub">আদায়ের হার ${bnN(rate)}%</div></div>
+      <div class="mini"><div class="lb">মোট বকেয়া</div><div class="vl">৳${bnN(dues)}</div><div class="sub">${dueStudents.size? bnN(dueStudents.size)+' জন ছাত্রের বকেয়া আছে':'কারো বকেয়া নেই'}</div></div>
+    </div>
+  </div>
+  <span class="secpill">• প্রধান পরিসংখ্যান</span>
+  <h2 style="border:0;margin:2px 0 2px;color:#12233a;font-size:23px">এক নজরে আপনার মাদ্রাসা</h2>
+  <p style="margin:0 0 12px;color:#6b7a70;font-size:14px">পরিসংখ্যান: সর্বকাল</p>
+  <div class="statgrid">
+    <div class="statcard"><div class="n">${bnN(students)}</div><div class="l">মোট শিক্ষার্থী</div></div>
+    <div class="statcard"><div class="n">৳${bnN(allCollected)}</div><div class="l">মোট সংগ্রহ</div></div>
+    <div class="statcard"><div class="n">৳${bnN(expense)}</div><div class="l">মোট খরচ</div></div>
+    <div class="statcard"><div class="n">৳${bnN(income-expense)}</div><div class="l">ব্যালেন্স</div></div>
+    <div class="statcard"><div class="n">${bnN(teachers)}</div><div class="l">মোট শিক্ষক-কর্মচারী</div></div>
+    <div class="statcard"><div class="n">৳${bnN(dues)}</div><div class="l">মোট বকেয়া (এখন)</div></div>
+  </div>
+  ${students===0? `<div class="box" style="margin-top:16px"><h2>শুরুটা এখান থেকে করুন</h2>
     <p>১) আগে জামাত তৈরি করুন → ২) তারপর ছাত্র যোগ করুন → ৩) হাজিরা ও বেতন চালু হবে।</p>
     <div class="row"><button class="act gold" onclick="go('classes')">আগে জামাত তৈরি করুন</button>
-    <button class="act" onclick="go('students')">ছাত্র যোগ করুন</button></div></div>
-    <div class="box"><h2>সব বিভাগ</h2>
-    <style>.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
-    .menu-grid button{background:linear-gradient(160deg,#fff,#eef6f1);border:1.5px solid #cfe3d6;border-radius:14px;padding:18px 8px;font:inherit;font-size:17px;font-weight:700;color:#0b5d3b;cursor:pointer;box-shadow:0 2px 6px #0b5d3b12}
-    .menu-grid button:active{transform:scale(.97)}</style>
-    <div class="menu-grid">
-      <button onclick="go('classes')">জামাত</button>
-      <button onclick="go('students')">ছাত্র</button>
-      <button onclick="go('attendance')">হাজিরা</button>
-      <button onclick="go('fees')">বেতন</button>
-      <button onclick="go('teachers')">শিক্ষক</button>
-      <button onclick="go('ledger')">হিসাব</button>
-      <button onclick="go('exams')">পরীক্ষা</button>
-      <button onclick="go('homework')">হোমওয়ার্ক</button>
-      <button onclick="go('opay')">অনলাইন পেমেন্ট</button>
-      <button onclick="go('notices')">নোটিশ</button>
-    </div></div>`;
+    <button class="act" onclick="go('students')">ছাত্র যোগ করুন</button></div></div>`:''}`;
 }
 
 /* ---------- জামাত ---------- */
