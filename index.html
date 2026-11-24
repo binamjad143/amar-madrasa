@@ -237,25 +237,31 @@ const bnN=n=>Number(n||0).toLocaleString('en-IN').replace(/\d/g,d=>'০১২৩
 async function pageHome(){
   const p=$('page'); p.innerHTML='<div class="box">লোড হচ্ছে…</div>';
   const now=new Date(), today=now.toISOString().slice(0,10), month=today.slice(0,7);
-  const [st,tc,attP,attAll,payM,payAll,billM,billAll,led]=await Promise.all([
+  const [st,tc,attP,attAll,payM,payAll,billM,billAll,led,od]=await Promise.all([
     sb.from('students').select('id',{count:'exact',head:true}).eq('status','active'),
     sb.from('teachers').select('id',{count:'exact',head:true}).eq('status','active'),
     sb.from('attendance').select('id',{count:'exact',head:true}).eq('att_date',today).eq('status','present'),
     sb.from('attendance').select('id',{count:'exact',head:true}).eq('att_date',today),
     sb.from('payments').select('amount').gte('pay_date',month+'-01'),
-    sb.from('payments').select('amount'),
-    sb.from('bills').select('total').eq('month',month),
-    sb.from('bills').select('total,paid,student_id'),
-    sb.from('ledger').select('type,amount')
+    sb.from('payments').select('amount,student_id'),
+    sb.from('bills').select('amount,discount').eq('bill_month',month),
+    sb.from('bills').select('amount,discount,student_id'),
+    sb.from('ledger').select('type,amount'),
+    sb.from('students').select('id,opening_due').eq('status','active')
   ]);
   const sum=(rows,f)=> (rows||[]).reduce((a,r)=>a+Number(f(r)||0),0);
   const students=st.count??0, teachers=tc.count??0;
   const present=attP.count??0, marked=attAll.count??0;
   const monthCollected=sum(payM.data,r=>r.amount), allCollected=sum(payAll.data,r=>r.amount);
-  const monthBilled=sum(billM.data,r=>r.total);
+  const monthBilled=sum(billM.data,r=>Number(r.amount)-Number(r.discount||0));
   const rate=monthBilled>0? Math.round(monthCollected/monthBilled*100):0;
+  // বকেয়া: ছাত্রপ্রতি (মোট বিল − মোট জমা + আগের বকেয়া), ধনাত্মকগুলোর যোগফল
+  const perBill={}, perPay={}, perOpen={};
+  (billAll.data||[]).forEach(b=>perBill[b.student_id]=(perBill[b.student_id]||0)+Number(b.amount)-Number(b.discount||0));
+  (payAll.data||[]).forEach(x=>perPay[x.student_id]=(perPay[x.student_id]||0)+Number(x.amount));
+  (od.data||[]).forEach(s=>perOpen[s.id]=Number(s.opening_due||0));
   let dues=0; const dueStudents=new Set();
-  (billAll.data||[]).forEach(b=>{ const d=Number(b.total||0)-Number(b.paid||0); if(d>0){ dues+=d; dueStudents.add(b.student_id); } });
+  new Set([...Object.keys(perBill),...Object.keys(perOpen)]).forEach(id=>{ const d=(perBill[id]||0)-(perPay[id]||0)+(perOpen[id]||0); if(d>0){ dues+=d; dueStudents.add(id); } });
   const income=sum((led.data||[]).filter(r=>r.type==='income'),r=>r.amount)+allCollected;
   const expense=sum((led.data||[]).filter(r=>r.type==='expense'),r=>r.amount);
   const instName=($('tbName').textContent||'মাদ্রাসা').trim();
@@ -325,21 +331,152 @@ async function pageStudents(){
     <div id="bk_preview"><div class="msg">আগে জামাত বাছুন, তারপর নাম লিখুন — এখানে তালিকা দেখা যাবে।</div></div>
     <div class="row"><label><input type="checkbox" id="bk_skip" checked> আগেই থাকা ছাত্র বাদ দিয়ে যোগ করুন</label></div>
     <div class="row"><button class="act gold" onclick="addBulk()">সব ছাত্র একসাথে যোগ করুন</button></div><div id="bk_msg"></div></div>
-    <div class="box"><h2>একজন করে ছাত্র যোগ করুন</h2>
+    <div class="box"><h2 id="sf_title">নতুন ভর্তি (পূর্ণ ফরম)</h2>
     ${!cls||!cls.length? '<div class="msg">আগে জামাত তৈরি করতে হবে — ছাত্র কোন জামাতে পড়বে তা লাগবে। <button class="act gold s" onclick="go(\'classes\')">আগে জামাত তৈরি করুন</button></div>':''}
-    <div class="row"><input id="ns_name" placeholder="ছাত্রের নাম"><input id="ns_roll" type="number" placeholder="রোল">
-    <select id="ns_class"><option value="">জামাত বাছুন</option>${opts}</select>
-    <input id="ns_phone" placeholder="অভিভাবকের ফোন (ঐচ্ছিক)"><button class="act" onclick="addStudent()">যোগ করুন</button></div><div id="s_msg"></div></div>
+    <input type="hidden" id="sf_id">
+    <div class="row"><input id="sf_name" placeholder="ছাত্রের নাম *" style="flex:1"><input id="sf_name_en" placeholder="নাম (English)" style="flex:1"></div>
+    <div class="row"><select id="sf_class"><option value="">জামাত বাছুন *</option>${opts}</select>
+    <input id="sf_section" placeholder="শাখা (ক/খ/গ)" style="width:110px"><input id="sf_roll" type="number" placeholder="রোল" style="width:90px">
+    <select id="sf_gender"><option value="">লিঙ্গ</option><option>ছেলে</option><option>মেয়ে</option></select></div>
+    <div class="row"><input id="sf_father" placeholder="বাবার নাম" style="flex:1"><input id="sf_mother" placeholder="মায়ের নাম" style="flex:1"></div>
+    <div class="row"><input id="sf_guardian" placeholder="অভিভাবকের নাম" style="flex:1"><input id="sf_phone" placeholder="অভিভাবকের ফোন" style="flex:1"></div>
+    <div class="row"><label>জন্মতারিখ <input id="sf_dob" type="date"></label><label>ভর্তির তারিখ <input id="sf_adm" type="date"></label>
+    <input id="sf_blood" placeholder="রক্তের গ্রুপ" style="width:110px"></div>
+    <div class="row"><input id="sf_prev" placeholder="আগের প্রতিষ্ঠান (থাকলে)" style="flex:1"><input id="sf_fee" type="number" placeholder="মাসিক ফি ৳ (আলাদা হলে)" style="width:170px">
+    <input id="sf_open" type="number" placeholder="আগের বকেয়া ৳" style="width:140px"></div>
+    <div class="row"><textarea id="sf_addr" placeholder="ঠিকানা" style="flex:1" rows="2"></textarea></div>
+    <div class="row"><button class="act gold" onclick="saveStudentForm()">সংরক্ষণ করুন</button>
+    <button class="act" onclick="pageStudents()">নতুন ফরম (খালি করুন)</button></div><div id="s_msg"></div></div>
     <div class="box"><h2>ছাত্রদের তালিকা (${sts?sts.length:0})</h2>
-    ${sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th><th>জামাত</th><th>অভিভাবকের ফোন</th></tr>
-      ${sts.map(s=>`<tr><td>${s.roll??''}</td><td>${esc(s.name)}</td><td>${esc(s.classes?s.classes.name:'')}</td><td>${esc(s.guardian_phone||'')}</td></tr>`).join('')}</table>`
-      : '<div class="msg">এখনো কোনো ছাত্র যোগ হয়নি। উপরের ফরমে নাম লিখে যোগ করুন।</div>'}</div>`;
+    ${sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th><th>জামাত</th><th>ফোন</th><th>কাজ</th></tr>
+      ${sts.map(s=>`<tr><td>${s.roll??''}</td><td>${esc(s.name)}</td><td>${esc(s.classes?s.classes.name:'')}</td><td>${esc(s.guardian_phone||'')}</td>
+      <td><button class="act s" onclick="pageStudentProfile('${s.id}')">প্রোফাইল</button> <button class="act s gold" onclick="editStudent('${s.id}')">এডিট</button> <button class="act s" onclick="printIdCard('${s.id}')">আইডি কার্ড</button></td></tr>`).join('')}</table>`
+      : '<div class="msg">এখনো কোনো ছাত্র যোগ হয়নি। উপরের ফরমে নাম লিখে যোগ করুন।</div>'}</div>
+    <div class="box"><h2>প্রমোশন (পরের জামাতে তোলা)</h2>
+    <div class="row"><select id="pm_from"><option value="">কোন জামাত থেকে</option>${opts}</select>
+    <select id="pm_to"><option value="">কোন জামাতে যাবে</option>${opts}</select>
+    <button class="act" onclick="promoteAll()">সব ছাত্রকে প্রমোশন দিন</button></div><div id="pm_msg"></div></div>
+    <div class="box"><h2>TC / ছেড়ে যাওয়া ছাত্র</h2><div id="tc_list">লোড হচ্ছে…</div></div>`;
+  loadTcList();
 }
-async function addStudent(){
-  const name=$('ns_name').value.trim(); if(!name) return msg($('s_msg'),'ছাত্রের নাম লিখুন।','err');
-  const {error}=await sb.from('students').insert({name,roll:$('ns_roll').value?Number($('ns_roll').value):null,
-    class_id:$('ns_class').value||null,guardian_phone:$('ns_phone').value.trim()});
-  error? msg($('s_msg'),'হয়নি: '+error.message,'err') : pageStudents();
+async function loadTcList(){
+  const {data}=await sb.from('students').select('*,classes(name)').in('status',['tc','left']).order('name');
+  const el=$('tc_list'); if(!el) return;
+  el.innerHTML= data&&data.length? `<table><tr><th>নাম</th><th>জামাত ছিল</th><th>অবস্থা</th><th>কাজ</th></tr>
+    ${data.map(s=>`<tr><td>${esc(s.name)}</td><td>${esc(s.classes?s.classes.name:'')}</td><td>${s.status==='tc'?'TC নিয়েছে':'ছেড়ে গেছে'}${s.tc_note? ' — '+esc(s.tc_note):''}</td>
+    <td><button class="act s" onclick="readmitStudent('${s.id}')">পুনঃভর্তি করুন</button></td></tr>`).join('')}</table>`
+    : '<div class="msg">TC নেওয়া বা ছেড়ে যাওয়া কোনো ছাত্র নেই।</div>';
+}
+async function saveStudentForm(){
+  const name=$('sf_name').value.trim(); if(!name) return msg($('s_msg'),'ছাত্রের নাম লিখুন।','err');
+  if(!$('sf_class').value) return msg($('s_msg'),'জামাত বাছুন।','err');
+  const row={name,name_en:$('sf_name_en').value.trim(),class_id:$('sf_class').value,section:$('sf_section').value.trim(),
+    roll:$('sf_roll').value?Number($('sf_roll').value):null,gender:$('sf_gender').value,
+    father_name:$('sf_father').value.trim(),mother_name:$('sf_mother').value.trim(),
+    guardian:$('sf_guardian').value.trim(),guardian_phone:$('sf_phone').value.trim(),
+    date_of_birth:$('sf_dob').value||null,admission_date:$('sf_adm').value||null,blood_group:$('sf_blood').value.trim(),
+    prev_school:$('sf_prev').value.trim(),monthly_fee:Number($('sf_fee').value||0),opening_due:Number($('sf_open').value||0),
+    address:$('sf_addr').value.trim()};
+  const id=$('sf_id').value;
+  const {error}= id? await sb.from('students').update(row).eq('id',id) : await sb.from('students').insert(row);
+  error? msg($('s_msg'),'হয়নি: '+error.message,'err') : (msg($('s_msg'),id?'ছাত্রের তথ্য আপডেট হয়েছে।':'নতুন ছাত্র ভর্তি হয়েছে।','ok'), setTimeout(pageStudents,700));
+}
+async function editStudent(id){
+  const {data:s}=await sb.from('students').select('*').eq('id',id).single(); if(!s) return;
+  await pageStudents();
+  $('sf_title').textContent='ছাত্রের তথ্য এডিট করুন'; $('sf_id').value=s.id;
+  const set=(k,v)=>{ if($(k)) $(k).value=v??''; };
+  set('sf_name',s.name); set('sf_name_en',s.name_en); set('sf_class',s.class_id); set('sf_section',s.section);
+  set('sf_roll',s.roll); set('sf_gender',s.gender); set('sf_father',s.father_name); set('sf_mother',s.mother_name);
+  set('sf_guardian',s.guardian); set('sf_phone',s.guardian_phone); set('sf_dob',s.date_of_birth); set('sf_adm',s.admission_date);
+  set('sf_blood',s.blood_group); set('sf_prev',s.prev_school); set('sf_fee',s.monthly_fee); set('sf_open',s.opening_due); set('sf_addr',s.address);
+  window.scrollTo(0,0); msg($('s_msg'),'তথ্য ফরমে এসেছে — বদলে “সংরক্ষণ করুন” চাপুন।');
+}
+async function pageStudentProfile(id){
+  const [{data:s},{data:bills},{data:pays},{data:att}]=await Promise.all([
+    sb.from('students').select('*,classes(name)').eq('id',id).single(),
+    sb.from('bills').select('*').eq('student_id',id).order('bill_month'),
+    sb.from('payments').select('*').eq('student_id',id).order('pay_date',{ascending:false}),
+    sb.from('attendance').select('status').eq('student_id',id)
+  ]);
+  if(!s){ $('page').innerHTML='<div class="box">ছাত্র পাওয়া যায়নি।</div>'; return; }
+  const billed=(bills||[]).reduce((a,b)=>a+Number(b.amount)-Number(b.discount||0),0);
+  const paid=(pays||[]).reduce((a,x)=>a+Number(x.amount),0);
+  const due=billed+Number(s.opening_due||0)-paid;
+  const ac={present:0,absent:0,late:0,leave:0}; (att||[]).forEach(a=>ac[a.status]=(ac[a.status]||0)+1);
+  $('page').innerHTML=`<div class="box"><h2>${esc(s.name)} ${s.name_en? '('+esc(s.name_en)+')':''}</h2>
+    <table><tr><td>জামাত</td><td><b>${esc(s.classes?s.classes.name:'')}</b> ${s.section? '— শাখা '+esc(s.section):''}, রোল ${s.roll??''}</td></tr>
+    <tr><td>বাবা / মা</td><td>${esc(s.father_name||'')} / ${esc(s.mother_name||'')}</td></tr>
+    <tr><td>অভিভাবক</td><td>${esc(s.guardian||'')} — ${esc(s.guardian_phone||'')}</td></tr>
+    <tr><td>জন্মতারিখ</td><td>${s.date_of_birth||''} ${s.blood_group? '• রক্ত: '+esc(s.blood_group):''}</td></tr>
+    <tr><td>ভর্তি</td><td>${s.admission_date||''} ${s.prev_school? '• আগে: '+esc(s.prev_school):''}</td></tr>
+    <tr><td>ঠিকানা</td><td>${esc(s.address||'')}</td></tr>
+    <tr><td>অবস্থা</td><td>${{active:'পড়ছে',tc:'TC নিয়েছে',left:'ছেড়ে গেছে'}[s.status]||s.status}</td></tr></table>
+    <div class="row"><button class="act gold" onclick="editStudent('${s.id}')">এডিট</button>
+    <button class="act" onclick="printIdCard('${s.id}')">আইডি কার্ড</button>
+    <button class="act" onclick="printStatement('${s.id}')">হিসাব প্রিন্ট</button>
+    ${s.status==='active'? `<button class="red" onclick="giveTC('${s.id}')">TC দিন</button>`:''}
+    <button class="act" onclick="go('students')">তালিকায় ফিরুন</button></div></div>
+    <div class="box"><h2>বেতনের হিসাব</h2>
+    <p>মোট বিল: <b>৳${bnN(billed)}</b> • মোট জমা: <b>৳${bnN(paid)}</b> • বকেয়া: <b style="color:${due>0?'#b3261e':'#0b5d3b'}">৳${bnN(Math.max(0,due))}</b></p>
+    ${pays&&pays.length? `<table><tr><th>তারিখ</th><th>পরিমাণ</th><th>মাধ্যম</th></tr>${pays.map(x=>`<tr><td>${x.pay_date||''}</td><td>৳${bnN(x.amount)}</td><td>${esc(x.method||'')}</td></tr>`).join('')}</table>`:'<div class="msg">এখনো কোনো জমা হয়নি।</div>'}</div>
+    <div class="box"><h2>হাজিরার সারসংক্ষেপ</h2>
+    <p>উপস্থিত <b>${bnN(ac.present)}</b> দিন • অনুপস্থিত <b>${bnN(ac.absent)}</b> • দেরি <b>${bnN(ac.late)}</b> • ছুটি <b>${bnN(ac.leave)}</b></p></div>`;
+  window.scrollTo(0,0);
+}
+async function giveTC(id){
+  const note=prompt('TC দেওয়ার কারণ/নোট লিখুন (না লিখলেও চলবে):'); if(note===null) return;
+  const {error}=await sb.from('students').update({status:'tc',tc_note:note}).eq('id',id);
+  error? alert('হয়নি: '+error.message) : pageStudents();
+}
+async function readmitStudent(id){
+  if(!confirm('এই ছাত্রকে আবার সক্রিয় (পড়ছে) হিসেবে ফিরিয়ে আনবেন?')) return;
+  const {error}=await sb.from('students').update({status:'active',tc_note:''}).eq('id',id);
+  if(!error) pageStudents();
+}
+async function promoteAll(){
+  const from=$('pm_from').value, to=$('pm_to').value;
+  if(!from||!to||from===to) return msg($('pm_msg'),'আলাদা দুটি জামাত বাছুন (কোন জামাত থেকে, কোন জামাতে যাবে)।','err');
+  const {data,error}=await sb.from('students').update({class_id:to}).eq('class_id',from).eq('status','active').select('id');
+  error? msg($('pm_msg'),'হয়নি: '+error.message,'err') : msg($('pm_msg'),bnN((data||[]).length)+' জন ছাত্রকে প্রমোশন দেওয়া হয়েছে।','ok');
+}
+function printIdCard(id){
+  sb.from('students').select('*,classes(name)').eq('id',id).single().then(({data:s})=>{
+    if(!s) return;
+    const inst=($('tbName').textContent||'মাদ্রাসা');
+    const qr='https://api.qrserver.com/v1/create-qr-code/?size=84x84&data='+encodeURIComponent('AM-'+s.id);
+    const w=window.open('','_blank');
+    w.document.write(`<html><head><title>আইডি কার্ড</title><style>body{font-family:sans-serif}.card{width:340px;border:2px solid #0b5d3b;border-radius:14px;overflow:hidden;margin:16px auto}.hd{background:#0b5d3b;color:#fff;text-align:center;padding:10px}.bd{padding:12px;display:flex;gap:12px}table td{padding:3px 6px;font-size:14px}</style></head><body>
+    <div class="card"><div class="hd"><b>${esc(inst)}</b><br><small>ছাত্র আইডি কার্ড</small></div>
+    <div class="bd"><img src="${qr}" width="84" height="84"><table>
+    <tr><td>নাম</td><td><b>${esc(s.name)}</b></td></tr>
+    <tr><td>জামাত</td><td>${esc(s.classes?s.classes.name:'')} ${s.section? '('+esc(s.section)+')':''}</td></tr>
+    <tr><td>রোল</td><td>${s.roll??''}</td></tr>
+    <tr><td>অভিভাবক</td><td>${esc(s.guardian||'')}</td></tr>
+    <tr><td>ফোন</td><td>${esc(s.guardian_phone||'')}</td></tr></table></div></div>
+    <script>window.onload=()=>window.print()<\/script></body></html>`);
+    w.document.close();
+  });
+}
+async function printStatement(id){
+  const [{data:s},{data:bills},{data:pays}]=await Promise.all([
+    sb.from('students').select('*,classes(name)').eq('id',id).single(),
+    sb.from('bills').select('*').eq('student_id',id).order('bill_month'),
+    sb.from('payments').select('*').eq('student_id',id).order('pay_date')
+  ]);
+  if(!s) return;
+  const billed=(bills||[]).reduce((a,b)=>a+Number(b.amount)-Number(b.discount||0),0);
+  const paid=(pays||[]).reduce((a,x)=>a+Number(x.amount),0);
+  const due=billed+Number(s.opening_due||0)-paid;
+  const inst=($('tbName').textContent||'মাদ্রাসা');
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>ছাত্রের হিসাব</title><style>body{font-family:sans-serif;padding:20px}h2{color:#0b5d3b}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:5px;font-size:14px}</style></head><body>
+  <h2>${esc(inst)}</h2><h3>ছাত্রের হিসাব বিবরণী — ${esc(s.name)} (${esc(s.classes?s.classes.name:'')}, রোল ${s.roll??''})</h3>
+  <p>মোট বিল ৳${bnN(billed)} • মোট জমা ৳${bnN(paid)} • বকেয়া <b>৳${bnN(Math.max(0,due))}</b></p>
+  <h4>বিলসমূহ</h4><table><tr><th>মাস</th><th>খাত</th><th>পরিমাণ</th></tr>${(bills||[]).map(b=>`<tr><td>${b.bill_month}</td><td>${esc(b.head_name)}</td><td>৳${bnN(Number(b.amount)-Number(b.discount||0))}</td></tr>`).join('')}</table>
+  <h4>জমাসমূহ</h4><table><tr><th>তারিখ</th><th>পরিমাণ</th><th>মাধ্যম</th></tr>${(pays||[]).map(x=>`<tr><td>${x.pay_date||''}</td><td>৳${bnN(x.amount)}</td><td>${esc(x.method||'')}</td></tr>`).join('')}</table>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
 }
 
 /* ---------- একসাথে পুরো ক্লাসের ছাত্র যোগ ---------- */
@@ -457,36 +594,86 @@ async function saveAttendance(){
 /* ---------- বেতন ---------- */
 async function pageFees(){
   const p=$('page'); const month=new Date().toISOString().slice(0,7);
-  const [{data:sts},{data:bills},{data:pays}]=await Promise.all([
+  const [{data:sts},{data:billsM},{data:billsAll},{data:pays},{data:heads}]=await Promise.all([
     sb.from('students').select('*,classes(name,monthly_fee)').eq('status','active').order('roll'),
     sb.from('bills').select('*').eq('bill_month',month),
-    sb.from('payments').select('*')
+    sb.from('bills').select('student_id,amount,discount'),
+    sb.from('payments').select('*'),
+    sb.from('fee_heads').select('*').order('id')
   ]);
-  const billSum={},paySum={};
-  (bills||[]).forEach(b=>billSum[b.student_id]=(billSum[b.student_id]||0)+Number(b.amount)-Number(b.discount||0));
+  const billM={}, billAll={}, paySum={};
+  (billsM||[]).forEach(b=>billM[b.student_id]=(billM[b.student_id]||0)+Number(b.amount)-Number(b.discount||0));
+  (billsAll||[]).forEach(b=>billAll[b.student_id]=(billAll[b.student_id]||0)+Number(b.amount)-Number(b.discount||0));
   (pays||[]).forEach(x=>paySum[x.student_id]=(paySum[x.student_id]||0)+Number(x.amount));
+  const mHeads=(heads||[]).filter(h=>h.kind==='monthly'), oHeads=(heads||[]).filter(h=>h.kind!=='monthly');
   p.innerHTML=`<div class="box"><h2>বেতন — ${month}</h2>
     <div class="row"><button class="act gold" onclick="makeMonthlyBills('${month}')">এক ক্লিকে এই মাসের বিল তৈরি করুন</button></div><div id="f_msg"></div>
-    ${sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th><th>জামাত</th><th>বিল (এই মাস)</th><th>মোট জমা</th><th>বকেয়া (মোট জমা অনুযায়ী)</th><th>জমা নিন</th></tr>
-    ${sts.map(s=>{const due=(billSum[s.id]||0)-(0); const paid=paySum[s.id]||0;
+    ${sts&&sts.length? `<table><tr><th>রোল</th><th>নাম</th><th>জামাত</th><th>বিল (এই মাস)</th><th>মোট জমা</th><th>বকেয়া</th><th>জমা নিন</th></tr>
+    ${sts.map(s=>{ const due=(billAll[s.id]||0)+Number(s.opening_due||0)-(paySum[s.id]||0);
       return `<tr><td>${s.roll??''}</td><td>${esc(s.name)}</td><td>${esc(s.classes?s.classes.name:'')}</td>
-      <td>৳${billSum[s.id]||0}</td><td>৳${paid}</td><td>৳${Math.max(0,(billSum[s.id]||0)-paid)}</td>
+      <td>৳${bnN(billM[s.id]||0)}</td><td>৳${bnN(paySum[s.id]||0)}</td><td>${due>0? '<b style="color:#b3261e">৳'+bnN(due)+'</b>':'<span style="color:#0b5d3b">পরিশোধিত</span>'}</td>
       <td><input id="pay_${s.id}" type="number" style="width:90px" placeholder="৳"><button class="act s" onclick="takePay('${s.id}')">জমা</button></td></tr>`}).join('')}</table>`
-    : '<div class="msg">ছাত্র নেই — আগে ছাত্র যোগ করুন।</div>'}</div>`;
+    : '<div class="msg">ছাত্র নেই — আগে ছাত্র যোগ করুন।</div>'}</div>
+    <div class="box"><h2>ফি সেটিংস (খাত ও পরিমাণ)</h2>
+    <p style="font-size:14px">মাসিক খাতগুলো প্রতি মাসের বিলে যোগ হয়। খাত না থাকলে জামাতের মাসিক ফি দিয়ে “মাসিক বেতন” নামে বিল হয়। কোনো ছাত্রের নিজের ফি আলাদা থাকলে সেটাই প্রযোজ্য হবে।</p>
+    <div class="row"><input id="fh_name" placeholder="খাতের নাম (যেমন: টিউশন ফি)"><input id="fh_amt" type="number" placeholder="পরিমাণ ৳" style="width:110px">
+    <select id="fh_kind"><option value="monthly">মাসিক</option><option value="admission">ভর্তি (একবার)</option><option value="exam">পরীক্ষা</option><option value="once">এককালীন</option></select>
+    <button class="act" onclick="addFeeHead()">খাত যোগ করুন</button></div><div id="fh_msg"></div>
+    ${heads&&heads.length? `<table><tr><th>খাত</th><th>পরিমাণ</th><th>ধরন</th><th></th></tr>
+      ${heads.map(h=>`<tr><td>${esc(h.name)}</td><td>৳${bnN(h.amount)}</td><td>${{monthly:'মাসিক',admission:'ভর্তি',exam:'পরীক্ষা',once:'এককালীন'}[h.kind]||h.kind}</td>
+      <td><button class="red s" onclick="delFeeHead(${h.id})">মুছুন</button></td></tr>`).join('')}</table>`:'<div class="msg">কোনো ফি খাত নেই — জামাতের মাসিক ফি চলছে।</div>'}</div>`;
 }
+async function addFeeHead(){
+  const name=$('fh_name').value.trim(), amount=Number($('fh_amt').value||0), kind=$('fh_kind').value;
+  if(!name||!amount) return msg($('fh_msg'),'খাতের নাম ও পরিমাণ দিন।','err');
+  const {error}=await sb.from('fee_heads').insert({name,amount,kind});
+  error? msg($('fh_msg'),'হয়নি: '+error.message,'err') : pageFees();
+}
+async function delFeeHead(id){ if(!confirm('এই ফি খাত মুছে ফেলবেন?')) return;
+  const {error}=await sb.from('fee_heads').delete().eq('id',id); if(!error) pageFees(); }
 async function makeMonthlyBills(month){
-  const {data:sts}=await sb.from('students').select('id,classes(monthly_fee)').eq('status','active');
-  const {data:exist}=await sb.from('bills').select('student_id').eq('bill_month',month).eq('head_name','মাসিক বেতন');
-  const have=new Set((exist||[]).map(b=>b.student_id));
-  const rows=(sts||[]).filter(s=>!have.has(s.id)).map(s=>({student_id:s.id,bill_month:month,head_name:'মাসিক বেতন',amount:Number(s.classes?s.classes.monthly_fee||0:0)}));
+  const [{data:sts},{data:heads}]=await Promise.all([
+    sb.from('students').select('id,monthly_fee,classes(monthly_fee)').eq('status','active'),
+    sb.from('fee_heads').select('*').eq('kind','monthly').order('id')
+  ]);
+  const {data:exist}=await sb.from('bills').select('student_id,head_name').eq('bill_month',month);
+  const have=new Set((exist||[]).map(b=>b.student_id+'|'+b.head_name));
+  const rows=[];
+  (sts||[]).forEach(s=>{
+    if(heads&&heads.length){
+      heads.forEach(h=>{ if(!have.has(s.id+'|'+h.name)) rows.push({student_id:s.id,bill_month:month,head_name:h.name,amount:Number(h.amount)}); });
+    } else {
+      const amt=Number(s.monthly_fee||0)>0? Number(s.monthly_fee) : Number(s.classes?s.classes.monthly_fee||0:0);
+      if(!have.has(s.id+'|মাসিক বেতন')) rows.push({student_id:s.id,bill_month:month,head_name:'মাসিক বেতন',amount:amt});
+    }
+  });
   if(!rows.length) return msg($('f_msg'),'এই মাসের বিল আগেই তৈরি আছে — নতুন করে হয়নি।');
   const {error}=await sb.from('bills').insert(rows);
-  error? msg($('f_msg'),'হয়নি: '+error.message,'err') : (msg($('f_msg'),rows.length+' জন ছাত্রের বিল তৈরি হলো।','ok'), pageFees());
+  error? msg($('f_msg'),'হয়নি: '+error.message,'err') : (msg($('f_msg'),bnN(rows.length)+'টি বিল তৈরি হলো।','ok'), pageFees());
 }
 async function takePay(studentId){
   const amt=Number(($('pay_'+studentId)||{}).value||0); if(!amt) return msg($('f_msg'),'আগে টাকার পরিমাণ লিখুন।','err');
-  const {error}=await sb.from('payments').insert({student_id:studentId,amount:amt,method:'cash',received_by:me.id});
-  error? msg($('f_msg'),'হয়নি: '+error.message,'err') : pageFees();
+  const month=new Date().toISOString().slice(0,7);
+  const {data,error}=await sb.from('payments').insert({student_id:studentId,month,amount:amt,method:'cash',received_by:me.id}).select('id').single();
+  if(error) return msg($('f_msg'),'হয়নি: '+error.message,'err');
+  const {data:s}=await sb.from('students').select('name,roll').eq('id',studentId).single();
+  window._rcpt={name:s?s.name:'',roll:s?s.roll:'',amount:amt,date:new Date().toISOString().slice(0,10),id:data?data.id:''};
+  msg($('f_msg'),`৳${bnN(amt)} জমা হয়েছে (${esc(window._rcpt.name)})।`,'ok');
+  $('f_msg').innerHTML+=`<div class="row"><button class="act gold" onclick="printReceipt()">রসিদ প্রিন্ট করুন</button><button class="act" onclick="pageFees()">তালিকায় ফিরুন</button></div>`;
+}
+function printReceipt(){
+  const r=window._rcpt; if(!r) return;
+  const inst=($('tbName').textContent||'মাদ্রাসা');
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>রসিদ</title><style>body{font-family:sans-serif;text-align:center;padding:24px}.box{border:2px solid #0b5d3b;border-radius:12px;padding:20px;max-width:420px;margin:auto}h2{color:#0b5d3b;margin:4px}table{margin:12px auto;text-align:left}td{padding:4px 10px}</style></head><body>
+  <div class="box"><h2>${esc(inst)}</h2><p>বেতন আদায়ের রসিদ</p><table>
+  <tr><td>ছাত্র</td><td><b>${esc(r.name)}</b> (রোল ${esc(r.roll)})</td></tr>
+  <tr><td>পরিমাণ</td><td><b>৳${bnN(r.amount)}</b></td></tr>
+  <tr><td>তারিখ</td><td>${esc(r.date)}</td></tr>
+  <tr><td>রসিদ নং</td><td>${esc(String(r.id).slice(0,8))}</td></tr></table>
+  <p style="font-size:12px">ধন্যবাদ — জাযাকাল্লাহু খাইরান</p></div>
+  <script>window.print()<\/script></body></html>`);
+  w.document.close();
 }
 
 /* ---------- নোটিশ ---------- */
